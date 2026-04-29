@@ -1,0 +1,374 @@
+import { Request, Response } from 'express';
+import prisma from '../prisma';
+
+export const getStudentFees = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { studentId } = req.params;
+    const rawFees = await prisma.fee.findMany({
+      where: { studentId },
+      include: {
+        course: { select: { name: true } },
+        payments: true
+      },
+      orderBy: { dueDate: 'asc' }
+    });
+
+    // Load institution settings for late fee config
+    const settings = await prisma.institutionSettings.findUnique({ where: { id: 'singleton' } });
+    const lateFeePerDay = settings?.lateFeePerDay ?? 10;
+    const gracePeriodDays = settings?.gracePeriodDays ?? 0;
+    const lateFeeEnabled = settings?.lateFeeEnabled ?? true;
+
+    // Auto-apply late fees based on institution settings
+    const processedFees = await Promise.all(rawFees.map(async (fee) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(fee.dueDate);
+      due.setHours(0, 0, 0, 0);
+      
+      let calculatedLateFee = 0;
+
+      if (lateFeeEnabled && today > due && fee.status !== 'PAID') {
+        const diffTime = today.getTime() - due.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const effectiveDays = Math.max(0, diffDays - gracePeriodDays);
+        calculatedLateFee = effectiveDays * lateFeePerDay;
+      }
+
+      if (fee.lateFee !== calculatedLateFee) {
+        return await prisma.fee.update({
+          where: { id: fee.id },
+          data: { lateFee: calculatedLateFee },
+          include: {
+            course: { select: { name: true } },
+            payments: true
+          }
+        });
+      }
+      return fee;
+    }));
+
+    res.status(200).json(processedFees);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const recordPayment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { feeIds, studentId, amount, paymentMode, transactionId } = req.body;
+    console.log('Recording Payment:', { feeIds, studentId, amount, paymentMode, transactionId });
+    
+    if (!feeIds || !Array.isArray(feeIds) || feeIds.length === 0) {
+      res.status(400).json({ message: 'At least one Fee ID is required' });
+      return;
+    }
+
+    if (!studentId) {
+      res.status(400).json({ message: 'Student ID is required' });
+      return;
+    }
+
+    const txnId = transactionId || `TXN-${Date.now()}`;
+    const payments = [];
+
+    // Pre-fetch all fees and calculate remaining balances
+    const feeDetails: { id: string; remaining: number }[] = [];
+    let totalRemaining = 0;
+    for (const feeId of feeIds) {
+      const fee = await prisma.fee.findUnique({ where: { id: feeId } });
+      if (!fee) { console.warn(`Fee ${feeId} not found`); continue; }
+      const previousPayments = await prisma.payment.findMany({ where: { feeId } });
+      const previousPaid = previousPayments.reduce((sum, p) => sum + p.amount, 0);
+      const totalDue = fee.amount + (fee.lateFee || 0);
+      const remaining = Math.max(0, totalDue - previousPaid);
+      feeDetails.push({ id: feeId, remaining });
+      totalRemaining += remaining;
+    }
+
+    // Determine the total payment amount to distribute
+    let totalPayAmount = totalRemaining; // default: pay everything
+    if (amount && !isNaN(parseFloat(amount))) {
+      totalPayAmount = Math.min(parseFloat(amount), totalRemaining);
+    }
+
+    if (isNaN(totalPayAmount) || totalPayAmount <= 0) {
+      res.status(400).json({ message: 'Invalid payment amount' });
+      return;
+    }
+
+    // Distribute payment: fill fees in order (oldest first), last fee gets remainder
+    let amountLeft = totalPayAmount;
+    for (const { id: feeId, remaining } of feeDetails) {
+      if (amountLeft <= 0) break;
+      const payAmount = Math.min(amountLeft, remaining);
+      amountLeft -= payAmount;
+
+      const payment = await prisma.payment.create({
+        data: {
+          feeId,
+          studentId,
+          amount: payAmount,
+          paymentMode,
+          transactionId: txnId,
+          date: new Date()
+        }
+      });
+
+      // Recalculate fee status
+      const fee = await prisma.fee.findUnique({ where: { id: feeId } });
+      const allPayments = await prisma.payment.findMany({ where: { feeId } });
+      const totalPaid = allPayments.reduce((sum, p) => sum + p.amount, 0);
+      const totalDue = (fee?.amount || 0) + (fee?.lateFee || 0);
+
+      let newStatus = 'PAID';
+      if (totalPaid < totalDue) {
+        newStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+      }
+
+      await prisma.fee.update({ where: { id: feeId }, data: { status: newStatus } });
+      payments.push(payment);
+    }
+
+    res.status(201).json({ 
+      message: `${payments.length} payments recorded successfully`, 
+      payments,
+      transactionId: txnId 
+    });
+  } catch (error) {
+    console.error('CRITICAL: Payment record failure:', error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+export const allocateFee = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { studentIds, courseId, amount, type, month, dueDate } = req.body;
+    
+    const fees = await Promise.all(studentIds.map((studentId: string) => 
+      prisma.fee.create({
+        data: {
+          studentId,
+          courseId,
+          amount: parseFloat(amount),
+          type: type || 'ACADEMIC',
+          month: month || null,
+          dueDate: new Date(dueDate),
+          status: 'PENDING'
+        }
+      })
+    ));
+    
+    res.status(201).json({ message: `${fees.length} fees allocated`, fees });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const getAllDues = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawDues = await prisma.fee.findMany({
+      where: {
+        status: { in: ['PENDING', 'PARTIAL'] },
+        dueDate: { lte: new Date() }
+      },
+      include: {
+        student: { include: { user: { select: { name: true } } } },
+        course: { select: { name: true } },
+        payments: true
+      }
+    });
+
+    // Load institution settings for late fee config
+    const settings = await prisma.institutionSettings.findUnique({ where: { id: 'singleton' } });
+    const lateFeePerDay = settings?.lateFeePerDay ?? 10;
+    const gracePeriodDays = settings?.gracePeriodDays ?? 0;
+    const lateFeeEnabled = settings?.lateFeeEnabled ?? true;
+
+    // Auto-apply late fees based on institution settings
+    const processedDues = await Promise.all(rawDues.map(async (fee) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(fee.dueDate);
+      due.setHours(0, 0, 0, 0);
+      
+      let calculatedLateFee = 0;
+
+      if (lateFeeEnabled && today > due) {
+        const diffTime = today.getTime() - due.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const effectiveDays = Math.max(0, diffDays - gracePeriodDays);
+        calculatedLateFee = effectiveDays * lateFeePerDay;
+      }
+
+      if (fee.lateFee !== calculatedLateFee) {
+        return await prisma.fee.update({
+          where: { id: fee.id },
+          data: { lateFee: calculatedLateFee },
+          include: {
+            student: { include: { user: { select: { name: true } } } },
+            course: { select: { name: true } },
+            payments: true
+          }
+        });
+      }
+      return fee;
+    }));
+
+    res.status(200).json(processedDues);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+export const getPayment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: {
+        student: { include: { user: { select: { name: true } } } },
+        fee: { include: { course: { select: { name: true } } } }
+      }
+    });
+
+    if (!payment) {
+      res.status(404).json({ message: 'Payment not found' });
+      return;
+    }
+
+    // Find all payments in the same transaction
+    const siblings = await prisma.payment.findMany({
+      where: { transactionId: payment.transactionId },
+      include: {
+        fee: { include: { course: { select: { name: true } } } }
+      }
+    });
+
+    res.status(200).json({ ...payment, siblings });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const deletePayment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) {
+      res.status(404).json({ message: 'Payment not found' });
+      return;
+    }
+
+    await prisma.payment.delete({ where: { id } });
+
+    // Recalculate fee status based on remaining payments
+    const fee = await prisma.fee.findUnique({ where: { id: payment.feeId } });
+    const remainingPayments = await prisma.payment.findMany({ where: { feeId: payment.feeId } });
+    const totalPaid = remainingPayments.reduce((sum, p) => sum + p.amount, 0);
+    const totalDue = (fee?.amount || 0) + (fee?.lateFee || 0);
+
+    let newStatus = 'PENDING';
+    if (totalPaid >= totalDue && totalDue > 0) {
+      newStatus = 'PAID';
+    } else if (totalPaid > 0) {
+      newStatus = 'PARTIAL';
+    }
+
+    await prisma.fee.update({ where: { id: payment.feeId }, data: { status: newStatus } });
+    res.status(200).json({ message: 'Payment deleted and fee status updated' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+// ─── STUDENT LEDGER ───────────────────────────────────────────────────────────
+export const getStudentLedger = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string' || q.trim().length < 1) {
+      res.status(400).json({ message: 'Search query is required' });
+      return;
+    }
+
+    const query = q.trim();
+
+    // Search by regNo (exact) or name (partial, case-insensitive)
+    const students = await prisma.student.findMany({
+      where: {
+        OR: [
+          { regNo: { contains: query } },
+          { user: { name: { contains: query } } }
+        ]
+      },
+      include: {
+        user: { select: { name: true, email: true, createdAt: true } },
+        courses: { include: { course: true, batch: true } },
+        fees: {
+          orderBy: { dueDate: 'asc' },
+          include: {
+            course: { select: { name: true } },
+            payments: { orderBy: { date: 'asc' } }
+          }
+        }
+      },
+      take: 10
+    });
+
+    const results = students.map(student => {
+      const fees = student.fees;
+
+      // Summary
+      const totalAllocated = fees.reduce((s, f) => s + f.amount + (f.lateFee || 0), 0);
+      const totalPaid = fees.reduce((s, f) =>
+        s + f.payments.reduce((ps, p) => ps + p.amount, 0), 0);
+      const totalRemaining = Math.max(0, totalAllocated - totalPaid);
+
+      // Academic fees (yearly)
+      const academicFees = fees.filter(f => f.type === 'ACADEMIC').map(f => {
+        const paid = f.payments.reduce((s, p) => s + p.amount, 0);
+        const gross = f.amount + (f.lateFee || 0);
+        return { ...f, totalPaid: paid, remaining: Math.max(0, gross - paid) };
+      });
+
+      // Hostel fees (monthly)
+      const hostelFees = fees.filter(f => f.type === 'HOSTEL').map(f => {
+        const paid = f.payments.reduce((s, p) => s + p.amount, 0);
+        const gross = f.amount + (f.lateFee || 0);
+        return { ...f, totalPaid: paid, remaining: Math.max(0, gross - paid) };
+      });
+
+      // Flat chronological transaction list
+      const transactions = fees.flatMap(f =>
+        f.payments.map(p => ({
+          ...p,
+          feeType: f.type,
+          feeMonth: f.month,
+          courseName: f.course.name
+        }))
+      ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      return {
+        student: {
+          id: student.id,
+          regNo: student.regNo,
+          status: student.status,
+          guardianName: student.guardianName,
+          phone: student.phone,
+          dob: student.dob,
+          gender: student.gender,
+          address: student.address,
+          isResidential: student.isResidential,
+          user: student.user,
+          courses: student.courses
+        },
+        summary: { totalAllocated, totalPaid, totalRemaining },
+        academicFees,
+        hostelFees,
+        transactions
+      };
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};

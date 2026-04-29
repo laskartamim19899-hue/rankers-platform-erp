@@ -1,0 +1,347 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   // SUPER_ADMIN, ADMIN, ACCOUNTANT, TEACHER, STUDENT, PARENT
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resetToken String?
+  resetTokenExpiry DateTime?
+  photoUrl String?
+
+  studentProfile Student?
+  staffProfile   StaffProfile?
+  batches        Batch[]
+
+}
+
+model Student {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  regNo           String?  @unique
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  guardianName    String
+  dob             DateTime
+  gender          String
+  phone           String
+  address         String
+  schoolName      String?
+  madhyamikMarks  Float?
+  hsMarksPhysics  Float?
+  hsMarksChemistry Float?
+  hsMarksBiology  Float?
+  prevNeetMarks   Float?
+  isResidential   Boolean  @default(false)
+  photoUrl        String?
+  aadhaarUrl      String?
+
+  courses         StudentCourse[]
+  fees            Fee[]
+  payments        Payment[]
+  attendances     Attendance[]
+  results         Result[]
+  hostelAlloc     HostelAllocation?
+  leavePasses     LeavePass[]
+  inventoryIssues InventoryIssue[]
+  scholarshipTier String?          // MERIT_A, MERIT_B, MERIT_C, NONE
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  name        String   // NEET, JEE, Board
+  description String?
+  duration    String?  // 1 Year, 2 Year, Crash
+  createdAt   DateTime @default(now())
+
+  batches     Batch[]
+  students    StudentCourse[]
+  fees        Fee[]
+}
+
+model Batch {
+  id          String   @id @default(uuid())
+  name        String   // Alpha, Helix, Crash
+  courseId    String
+  teacherId   String?
+  course      Course   @relation(fields: [courseId], references: [id])
+  teacher     User?    @relation(fields: [teacherId], references: [id])
+  
+  attendances Attendance[]
+  timetable   Timetable?
+  studentCourses StudentCourse[]
+}
+
+model StudentCourse {
+  studentId String
+  courseId  String
+  batchId   String?
+  student   Student @relation(fields: [studentId], references: [id])
+  course    Course  @relation(fields: [courseId], references: [id])
+  batch     Batch?  @relation(fields: [batchId], references: [id])
+
+  @@id([studentId, courseId])
+}
+
+model Fee {
+  id          String   @id @default(uuid())
+  studentId   String
+  courseId    String
+  amount      Float
+  type        String   @default("ACADEMIC") // ACADEMIC, HOSTEL
+  month       String?  // For hostel fees: JAN, FEB, etc.
+  dueDate     DateTime
+  lateFee     Float    @default(0)
+  status      String   // PENDING, PAID, PARTIAL
+  student     Student  @relation(fields: [studentId], references: [id])
+  course      Course   @relation(fields: [courseId], references: [id])
+
+  payments    Payment[]
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  feeId         String
+  studentId     String
+  amount        Float
+  paymentMode   String   // CASH, UPI, ONLINE
+  transactionId String?
+  date          DateTime @default(now())
+  fee           Fee      @relation(fields: [feeId], references: [id])
+  student       Student  @relation(fields: [studentId], references: [id])
+}
+
+model Attendance {
+  id              String         @id @default(uuid())
+  studentId       String
+  batchId         String
+  timetableSlotId String?
+  date            DateTime
+  status          String         // PRESENT, ABSENT, LATE
+  student         Student        @relation(fields: [studentId], references: [id])
+  batch           Batch          @relation(fields: [batchId], references: [id])
+  timetableSlot   TimetableSlot? @relation(fields: [timetableSlotId], references: [id])
+}
+
+model Test {
+  id          String   @id @default(uuid())
+  title       String
+  type        String   // DPP, WEEKLY, MOCK
+  date        DateTime
+  maxMarks    Float
+  
+  results     Result[]
+}
+
+model Result {
+  id          String   @id @default(uuid())
+  testId      String
+  studentId   String
+  marksObtained Float
+  test        Test     @relation(fields: [testId], references: [id])
+  student     Student  @relation(fields: [studentId], references: [id])
+}
+
+model Hostel {
+  id          String   @id @default(uuid())
+  roomNumber  String   @unique
+  capacity    Int
+  occupancy   Int      @default(0)
+
+  allocations HostelAllocation[]
+}
+
+model HostelAllocation {
+  id          String   @id @default(uuid())
+  studentId   String   @unique
+  hostelId    String
+  joinDate    DateTime
+  leaveDate   DateTime?
+  student     Student  @relation(fields: [studentId], references: [id])
+  hostel      Hostel   @relation(fields: [hostelId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  title       String
+  category    String   // SALARY, RENT, FOOD, OTHER
+  amount      Float
+  date        DateTime
+  description String?
+  payeeName   String?
+  purpose     String?
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  type        String   // ACADEMIC, GENERAL, URGENT
+  targetAudience String // ALL, STUDENTS, STAFF
+  createdAt   DateTime @default(now())
+}
+
+model InstitutionSettings {
+  id               String  @id @default("singleton")
+  lateFeePerDay    Float   @default(10)   // ₹ per day
+  gracePeriodDays  Int     @default(0)    // days before late fee kicks in
+  lateFeeEnabled   Boolean @default(true)
+  institutionName  String  @default("Rankers' Platform")
+  phone            String? @default("+91 00000 00000")
+  email            String? @default("info@rankersplatform.com")
+  website          String? @default("www.rankersplatform.com")
+  address          String? @default("Main Campus, City")
+  gstNumber        String? 
+  tagline          String? @default("Empowering Future Leaders")
+  principalName    String?
+  updatedAt        DateTime @updatedAt
+}
+
+model AdmissionInquiry {
+  id              String   @id @default(uuid())
+  name            String
+  guardianName    String
+  dob             DateTime
+  gender          String
+  phone           String
+  email           String
+  address         String
+  schoolName      String?
+  courseInterest  String?  // NEET, JEE, etc.
+  status          String   @default("NEW") // NEW, CONTACTED, REGISTERED, REJECTED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model LeavePass {
+  id          String   @id @default(uuid())
+  studentId   String
+  reason      String
+  destination String
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("APPROVED") // APPROVED, REJECTED, PENDING, RETURNED
+  passNo      String   @unique
+  issuedBy    String   // Admin/Staff name
+  issuedAt    DateTime @default(now())
+  returnedAt  DateTime?
+  notes       String?
+  student     Student  @relation(fields: [studentId], references: [id])
+}
+
+model Timetable {
+  id        String          @id @default(uuid())
+  batchId   String          @unique
+  batch     Batch           @relation(fields: [batchId], references: [id])
+  slots     TimetableSlot[]
+  updatedAt DateTime        @updatedAt
+}
+
+model TimetableSlot {
+  id          String    @id @default(uuid())
+  timetableId String
+  day         String    // MON, TUE, WED, THU, FRI, SAT
+  startTime   String    // e.g. "09:00"
+  endTime     String    // e.g. "10:30"
+  subject     String
+  teacherName String?
+  roomNo      String?
+  timetable   Timetable @relation(fields: [timetableId], references: [id])
+  attendances Attendance[]
+}
+
+model InventoryItem {
+  id          String           @id @default(uuid())
+  name        String
+  category    String           // BOOK, EQUIPMENT, STATIONERY, OTHER
+  totalQty    Int
+  availableQty Int
+  description String?
+  createdAt   DateTime         @default(now())
+  issues      InventoryIssue[]
+}
+
+model InventoryIssue {
+  id        String        @id @default(uuid())
+  itemId    String
+  studentId String
+  issuedOn  DateTime      @default(now())
+  dueDate   DateTime
+  returnedOn DateTime?
+  condition String?       // GOOD, DAMAGED
+  item      InventoryItem @relation(fields: [itemId], references: [id])
+  student   Student       @relation(fields: [studentId], references: [id])
+}
+
+model StaffProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  designation   String
+  department    String?
+  baseSalary    Float    @default(0)
+  bankAccount   String?
+  ifscCode      String?
+  joiningDate   DateTime @default(now())
+
+  salaryRecords SalaryRecord[]
+}
+
+model SalaryRecord {
+  id              String       @id @default(uuid())
+  staffProfileId  String
+  staffProfile    StaffProfile @relation(fields: [staffProfileId], references: [id])
+  month           String
+  basicSalary     Float
+  allowances      Float        @default(0)
+  deductions      Float        @default(0)
+  netSalary       Float
+  paymentMode     String       @default("CASH")
+  transactionId   String?
+  paidAt          DateTime     @default(now())
+  remarks         String?
+  status          String       @default("PAID")
+}
+
+model GuestTeacher {
+  id            String         @id @default(uuid())
+  name          String
+  phone         String?
+  email         String?
+  subject       String
+  qualification String?
+  ratePerClass  Float
+  createdAt     DateTime       @default(now())
+
+  payments      GuestPayment[]
+}
+
+model GuestPayment {
+  id             String       @id @default(uuid())
+  guestTeacherId String
+  guestTeacher   GuestTeacher @relation(fields: [guestTeacherId], references: [id])
+  month          String
+  classesHeld    Int
+  ratePerClass   Float
+  classAmount    Float
+  allowances     Float        @default(0)
+  totalAmount    Float
+  paymentMode    String       @default("CASH")
+  transactionId  String?
+  remarks        String?
+  paidAt         DateTime     @default(now())
+  status         String       @default("PAID")
+}
