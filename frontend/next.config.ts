@@ -10,9 +10,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true, // হোস্টিংগারে ইমেজ ঠিকঠাক দেখানোর জন্য এটি প্রয়োজন হতে পারে
   },
-  eslint: {
-    ignoreDuringBuilds: true, // বিল্ডের সময় ছোটখাটো লিন্ট এরর ইগনোর করার জন্য
-  },
   typescript: {
     ignoreBuildErrors: true, // টাইপস্ক্রিপ্ট এরর থাকলেও বিল্ড কমপ্লিট হবে
   }
