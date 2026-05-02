@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { studentApi, academicApi } from "@/lib/api";
 import { exportToCSV } from "@/lib/utils";
 
 export default function StudentDatabase() {
+  const router = useRouter();
   const [students, setStudents] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<any[]>([]);
@@ -249,6 +251,13 @@ export default function StudentDatabase() {
                         >
                           <span className="material-symbols-outlined text-lg">visibility</span>
                         </Link>
+                        <button 
+                          onClick={() => router.push(`/admin/students/${student.id}?action=promote`)}
+                          className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center border border-indigo-100 hover:shadow-lg hover:shadow-indigo-200"
+                          title="Promote / Enroll New"
+                        >
+                          <span className="material-symbols-outlined text-lg">trending_up</span>
+                        </button>
                         <Link 
                           href={`/admin/students/${student.id}/edit`} 
                           className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex items-center justify-center border border-amber-100 hover:shadow-lg hover:shadow-amber-200"

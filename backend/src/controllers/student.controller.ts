@@ -4,10 +4,23 @@ import bcrypt from 'bcryptjs';
 
 // Auto-generate Registration Number
 const generateRegNo = async () => {
-  const count = await prisma.student.count();
-  const year = new Date().getFullYear();
-  return `RP-${year}-${(count + 1).toString().padStart(4, '0')}`;
+  const students = await prisma.student.findMany({
+    where: { 
+      regNo: { not: null },
+      status: 'APPROVED'
+    },
+    select: { regNo: true }
+  });
+  
+  const maxRegNo = students.reduce((max, s) => {
+    const num = parseInt(s.regNo || '0');
+    return isNaN(num) ? max : (num > max ? num : max);
+  }, 0);
+  
+  return (maxRegNo + 1).toString();
 };
+
+
 
 export const createStudent = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -142,7 +155,7 @@ export const approveStudent = async (req: Request, res: Response): Promise<void>
     const { id } = req.params;
     
     // Check if already approved
-    const student = await prisma.student.findUnique({ where: { id } });
+    const student = await prisma.student.findUnique({ where: { id: id as string } });
     if (!student) {
       res.status(404).json({ message: 'Student not found' });
       return;
@@ -155,7 +168,7 @@ export const approveStudent = async (req: Request, res: Response): Promise<void>
     const regNo = await generateRegNo();
 
     const updated = await prisma.student.update({
-      where: { id },
+      where: { id: id as string },
       data: {
         status: 'APPROVED',
         regNo
@@ -189,7 +202,7 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
   try {
     const { id } = req.params;
     const student = await prisma.student.findUnique({
-      where: { id },
+      where: { id: id as string },
       include: {
         user: { select: { name: true, email: true } },
         courses: { include: { course: true, batch: true } },
@@ -215,7 +228,7 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
     const { phone, address, photoUrl, guardianName, schoolName } = req.body;
 
     const updated = await prisma.student.update({
-      where: { id },
+      where: { id: id as string },
       data: {
         ...(phone !== undefined && { phone }),
         ...(address !== undefined && { address }),
@@ -235,7 +248,7 @@ export const searchStudentByRegNo = async (req: Request, res: Response): Promise
   try {
     const { regNo } = req.params;
     const student = await prisma.student.findUnique({
-      where: { regNo },
+      where: { regNo: regNo as string },
       include: {
         user: { select: { name: true, email: true } },
         courses: { include: { course: true, batch: true } },
@@ -263,34 +276,107 @@ export const searchStudentByRegNo = async (req: Request, res: Response): Promise
 export const deleteStudent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const student = await prisma.student.findUnique({ where: { id } });
+    const student = await prisma.student.findUnique({ where: { id: id as string } });
     if (!student) {
       res.status(404).json({ message: 'Student not found' });
       return;
     }
 
     // Cleanup all relations
-    await prisma.studentCourse.deleteMany({ where: { studentId: id } });
-    await prisma.attendance.deleteMany({ where: { studentId: id } });
-    await prisma.result.deleteMany({ where: { studentId: id } });
+    await prisma.studentCourse.deleteMany({ where: { studentId: id as string } });
+    await prisma.attendance.deleteMany({ where: { studentId: id as string } });
+    await prisma.result.deleteMany({ where: { studentId: id as string } });
     
     // Cleanup new modules
-    await prisma.leavePass.deleteMany({ where: { studentId: id } });
-    await prisma.inventoryIssue.deleteMany({ where: { studentId: id } });
+    await prisma.leavePass.deleteMany({ where: { studentId: id as string } });
+    await prisma.inventoryIssue.deleteMany({ where: { studentId: id as string } });
     
     // Payments linked to student
-    await prisma.payment.deleteMany({ where: { studentId: id } });
-    await prisma.fee.deleteMany({ where: { studentId: id } });
+    await prisma.payment.deleteMany({ where: { studentId: id as string } });
+    await prisma.fee.deleteMany({ where: { studentId: id as string } });
     
-    await prisma.hostelAllocation.deleteMany({ where: { studentId: id } });
+    await prisma.hostelAllocation.deleteMany({ where: { studentId: id as string } });
 
     // Finally delete student and user
-    await prisma.student.delete({ where: { id } });
+    await prisma.student.delete({ where: { id: id as string } });
     await prisma.user.delete({ where: { id: student.userId } });
 
     res.status(200).json({ message: 'Student deleted successfully' });
   } catch (error) {
     console.error("Delete Student Error:", error);
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
+  }
+};export const enrollOrPromote = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { courseId, batchId, academicFee, monthlyHostelFee, isResidential } = req.body;
+
+    const student = await prisma.student.findUnique({ where: { id: id as string } });
+    if (!student) {
+      res.status(404).json({ message: 'Student not found' });
+      return;
+    }
+
+    // 1. Upsert StudentCourse enrollment
+    await prisma.studentCourse.upsert({
+      where: {
+        studentId_courseId: {
+          studentId: id as string,
+          courseId: courseId as string
+        }
+      },
+      update: { batchId: batchId as string },
+      create: {
+        studentId: id as string,
+        courseId: courseId as string,
+        batchId: batchId as string
+      }
+    });
+
+    // 2. Generate New Academic Fee
+    if (academicFee) {
+      await prisma.fee.create({
+        data: {
+          studentId: id as string,
+          courseId: courseId as string,
+          amount: parseFloat(academicFee),
+          type: 'ACADEMIC',
+          dueDate: new Date(),
+          status: 'PENDING'
+        }
+      });
+    }
+
+    // 3. Generate Hostel Fees if applicable
+    const shouldAddHostel = isResidential === true || isResidential === 'true';
+    if (shouldAddHostel && monthlyHostelFee) {
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      const admissionDate = new Date();
+      const startMonth = admissionDate.getMonth();
+      const startYear = admissionDate.getFullYear();
+      
+      for (let i = 0; i < 12; i++) {
+        const targetMonth = (startMonth + i) % 12;
+        const yearOffset = Math.floor((startMonth + i) / 12);
+        const dueDate = new Date(startYear + yearOffset, targetMonth, 10);
+        
+        await prisma.fee.create({
+          data: {
+            studentId: id as string,
+            courseId: courseId as string,
+            amount: parseFloat(monthlyHostelFee),
+            type: 'HOSTEL',
+            month: months[targetMonth],
+            dueDate,
+            status: 'PENDING'
+          }
+        });
+      }
+    }
+
+    res.status(200).json({ message: 'Student promoted/enrolled successfully' });
+  } catch (error) {
+    console.error('Error in enrollOrPromote:', error);
+    res.status(500).json({ message: 'Server error', error });
   }
 };

@@ -5,7 +5,7 @@ export const getStudentFees = async (req: Request, res: Response): Promise<void>
   try {
     const { studentId } = req.params;
     const rawFees = await prisma.fee.findMany({
-      where: { studentId },
+      where: { studentId: studentId as string },
       include: {
         course: { select: { name: true } },
         payments: true
@@ -223,7 +223,7 @@ export const getPayment = async (req: Request, res: Response): Promise<void> => 
   try {
     const { id } = req.params;
     const payment = await prisma.payment.findUnique({
-      where: { id },
+      where: { id: id as string },
       include: {
         student: { include: { user: { select: { name: true } } } },
         fee: { include: { course: { select: { name: true } } } }
@@ -252,13 +252,13 @@ export const getPayment = async (req: Request, res: Response): Promise<void> => 
 export const deletePayment = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const payment = await prisma.payment.findUnique({ where: { id } });
+    const payment = await prisma.payment.findUnique({ where: { id: id as string } });
     if (!payment) {
       res.status(404).json({ message: 'Payment not found' });
       return;
     }
 
-    await prisma.payment.delete({ where: { id } });
+    await prisma.payment.delete({ where: { id: id as string } });
 
     // Recalculate fee status based on remaining payments
     const fee = await prisma.fee.findUnique({ where: { id: payment.feeId } });

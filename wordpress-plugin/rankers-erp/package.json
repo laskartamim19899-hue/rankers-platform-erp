@@ -1,0 +1,19 @@
+{
+  "name": "rankers-erp-plugin",
+  "version": "1.0.0",
+  "description": "Rankers Platform ERP WordPress Plugin React Frontend",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start",
+    "lint:js": "wp-scripts lint-js"
+  },
+  "dependencies": {
+    "@wordpress/element": "^5.0.0",
+    "axios": "^1.6.0",
+    "lucide-react": "^0.400.0"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^27.0.0"
+  }
+}

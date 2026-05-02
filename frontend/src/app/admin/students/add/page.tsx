@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { studentApi, academicApi, inquiryApi } from "@/lib/api";
 
-export default function AddStudent() {
+function AddStudentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inquiryId = searchParams.get("inquiryId");
@@ -206,5 +206,13 @@ export default function AddStudent() {
         </form>
       </main>
     </div>
+  );
+}
+
+export default function AddStudent() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center font-bold text-slate-400">Loading form...</div>}>
+      <AddStudentContent />
+    </Suspense>
   );
 }

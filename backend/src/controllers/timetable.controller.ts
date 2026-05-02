@@ -7,7 +7,7 @@ export const getTimetable = async (req: Request, res: Response): Promise<void> =
   try {
     const { batchId } = req.params;
     const timetable = await prisma.timetable.findUnique({
-      where: { batchId },
+      where: { batchId: batchId as string },
       include: { slots: { orderBy: [{ day: 'asc' }, { startTime: 'asc' }] }, batch: true }
     });
     res.status(200).json(timetable);
@@ -61,7 +61,7 @@ export const upsertTimetable = async (req: Request, res: Response): Promise<void
 export const deleteSlot = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    await prisma.timetableSlot.delete({ where: { id } });
+    await prisma.timetableSlot.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Slot deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });

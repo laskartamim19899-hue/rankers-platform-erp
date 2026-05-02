@@ -35,6 +35,7 @@ export const studentApi = {
   update: (id: string, data: any) => api.patch(`/students/${id}`, data),
   delete: (id: string) => api.delete(`/students/${id}`),
   searchByRegNo: (regNo: string) => api.get(`/students/search/${regNo}`),
+  enroll: (id: string, data: any) => api.post(`/students/${id}/enroll`, data),
 };
 
 export const financeApi = {

@@ -131,3 +131,57 @@ export const getPayrollReport = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ message: 'Server error', error });
   }
 };
+
+export const getDashboardStats = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const [
+      totalStudents,
+      pendingStudents,
+      hostelStudents,
+      totalCollected,
+      totalExpenses,
+      dueFees,
+      payments
+    ] = await Promise.all([
+      prisma.student.count({ where: { status: 'APPROVED' } }),
+      prisma.student.count({ where: { status: 'PENDING' } }),
+      prisma.student.count({ where: { isResidential: true, status: 'APPROVED' } }),
+      prisma.payment.aggregate({ _sum: { amount: true } }),
+      prisma.expense.aggregate({ _sum: { amount: true } }),
+      prisma.fee.findMany({
+        where: { status: { in: ['PENDING', 'PARTIAL'] }, dueDate: { lte: new Date() } },
+        include: { payments: { select: { amount: true } } }
+      }),
+      prisma.payment.findMany({
+        select: { amount: true, date: true }
+      })
+    ]);
+
+    // Calculate total dues
+    const totalDues = dueFees.reduce((sum, fee) => {
+      const gross = fee.amount + (fee.lateFee || 0);
+      const paid = fee.payments.reduce((s, p) => s + p.amount, 0);
+      return sum + Math.max(0, gross - paid);
+    }, 0);
+
+    // Calculate monthly collection trend
+    const revMap: Record<string, number> = {};
+    payments.forEach(p => {
+      const month = p.date.toLocaleString('default', { month: 'short' });
+      revMap[month] = (revMap[month] || 0) + p.amount;
+    });
+    const monthlyCollection = Object.entries(revMap).map(([month, total]) => ({ month, total }));
+
+    res.status(200).json({
+      totalStudents,
+      pendingStudents,
+      hostelStudents,
+      totalCollected: totalCollected._sum.amount || 0,
+      totalDues,
+      totalExpenses: totalExpenses._sum.amount || 0,
+      monthlyCollection
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};

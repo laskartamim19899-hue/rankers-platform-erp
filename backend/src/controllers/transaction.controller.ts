@@ -55,7 +55,7 @@ export const getTransactionByTxnId = async (req: Request, res: Response): Promis
     const { txnId } = req.params;
 
     const payments = await prisma.payment.findMany({
-      where: { transactionId: txnId },
+      where: { transactionId: txnId as string },
       include: {
         student: {
           include: {
@@ -76,12 +76,12 @@ export const getTransactionByTxnId = async (req: Request, res: Response): Promis
     }
 
     const totalAmount = payments.reduce((s, p) => s + p.amount, 0);
-    const student = payments[0].student;
+    const student = (payments[0] as any).student;
     const date = payments[0].date;
-    const paymentMode = payments[0].paymentMode;
+    const paymentMode = (payments[0] as any).paymentMode;
 
     // Build line items
-    const lineItems = payments.map(p => ({
+    const lineItems = payments.map((p: any) => ({
       paymentId: p.id,
       feeType: p.fee.type,
       feeMonth: p.fee.month,

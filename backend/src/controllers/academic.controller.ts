@@ -7,7 +7,7 @@ export const getStudentAcademicSummary = async (req: Request, res: Response): Pr
 
     // Fetch Attendance
     const attendance = await prisma.attendance.findMany({
-      where: { studentId }
+      where: { studentId: studentId as string }
     });
     const totalDays = attendance.length;
     const presentDays = attendance.filter(a => a.status === 'PRESENT').length;
@@ -15,7 +15,7 @@ export const getStudentAcademicSummary = async (req: Request, res: Response): Pr
 
     // Fetch Test Results
     const results = await prisma.result.findMany({
-      where: { studentId },
+      where: { studentId: studentId as string },
       include: { test: true },
       orderBy: { test: { date: 'desc' } }
     });
@@ -166,7 +166,7 @@ export const assignTeacher = async (req: Request, res: Response): Promise<void> 
     const { id } = req.params;
     const { teacherId } = req.body;
     const updated = await prisma.batch.update({
-      where: { id },
+      where: { id: id as string },
       data: { teacherId },
       include: {
         teacher: { select: { name: true, email: true } }
@@ -183,9 +183,9 @@ export const deleteBatch = async (req: Request, res: Response): Promise<void> =>
     const { id } = req.params;
     
     // Delete attendance records first
-    await prisma.attendance.deleteMany({ where: { batchId: id } });
+    await prisma.attendance.deleteMany({ where: { batchId: id as string } });
     
-    await prisma.batch.delete({ where: { id } });
+    await prisma.batch.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Batch removed successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
@@ -221,11 +221,11 @@ export const deleteCourse = async (req: Request, res: Response): Promise<void> =
     const { id } = req.params;
     
     // Cleanup relations first to avoid foreign key errors
-    await prisma.studentCourse.deleteMany({ where: { courseId: id } });
-    await prisma.fee.deleteMany({ where: { courseId: id } });
-    await prisma.batch.deleteMany({ where: { courseId: id } });
+    await prisma.studentCourse.deleteMany({ where: { courseId: id as string } });
+    await prisma.fee.deleteMany({ where: { courseId: id as string } });
+    await prisma.batch.deleteMany({ where: { courseId: id as string } });
     
-    await prisma.course.delete({ where: { id } });
+    await prisma.course.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Course deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
@@ -316,7 +316,7 @@ export const getResultsByRegNo = async (req: Request, res: Response): Promise<vo
     const { regNo } = req.params;
 
     const student = await prisma.student.findUnique({
-      where: { regNo: regNo.toUpperCase() },
+      where: { regNo: String(regNo).toUpperCase() },
       include: {
         user: { select: { name: true } },
         courses: { include: { course: true, batch: true } }

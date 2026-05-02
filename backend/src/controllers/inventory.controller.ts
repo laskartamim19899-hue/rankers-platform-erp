@@ -49,10 +49,10 @@ export const returnItem = async (req: Request, res: Response): Promise<void> => 
   try {
     const { id } = req.params;
     const { condition } = req.body;
-    const issue = await prisma.inventoryIssue.findUnique({ where: { id } });
+    const issue = await prisma.inventoryIssue.findUnique({ where: { id: id as string } });
     if (!issue) { res.status(404).json({ message: 'Issue not found' }); return; }
     await prisma.$transaction([
-      prisma.inventoryIssue.update({ where: { id }, data: { returnedOn: new Date(), condition } }),
+      prisma.inventoryIssue.update({ where: { id: id as string }, data: { returnedOn: new Date(), condition } }),
       prisma.inventoryItem.update({ where: { id: issue.itemId }, data: { availableQty: { increment: 1 } } })
     ]);
     res.status(200).json({ message: 'Item returned' });
@@ -64,8 +64,8 @@ export const returnItem = async (req: Request, res: Response): Promise<void> => 
 export const deleteItem = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    await prisma.inventoryIssue.deleteMany({ where: { itemId: id } });
-    await prisma.inventoryItem.delete({ where: { id } });
+    await prisma.inventoryIssue.deleteMany({ where: { itemId: id as string } });
+    await prisma.inventoryItem.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Item deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });

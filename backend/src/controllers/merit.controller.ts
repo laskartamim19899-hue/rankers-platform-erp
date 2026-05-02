@@ -35,7 +35,7 @@ export const updateScholarshipTier = async (req: Request, res: Response): Promis
     const { id } = req.params;
     const { scholarshipTier } = req.body;
     const student = await prisma.student.update({
-      where: { id },
+      where: { id: id as string },
       data: { scholarshipTier }
     });
     res.status(200).json(student);

@@ -39,7 +39,7 @@ export const getLeaveById = async (req: Request, res: Response): Promise<void> =
   try {
     const { id } = req.params;
     const leave = await prisma.leavePass.findUnique({
-      where: { id },
+      where: { id: id as string },
       include: { student: { include: { user: true, courses: { include: { course: true } }, hostelAlloc: { include: { hostel: true } } } } }
     });
     if (!leave) { res.status(404).json({ message: 'Leave pass not found' }); return; }
@@ -52,7 +52,7 @@ export const updateLeaveStatus = async (req: Request, res: Response): Promise<vo
     const { id } = req.params;
     const { status, returnedAt } = req.body;
     const leave = await prisma.leavePass.update({
-      where: { id },
+      where: { id: id as string },
       data: { status, returnedAt: returnedAt ? new Date(returnedAt) : undefined }
     });
     res.status(200).json(leave);
@@ -62,7 +62,7 @@ export const updateLeaveStatus = async (req: Request, res: Response): Promise<vo
 export const deleteLeave = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    await prisma.leavePass.delete({ where: { id } });
+    await prisma.leavePass.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Leave pass deleted' });
   } catch (error) { res.status(500).json({ message: 'Server error', error }); }
 };
@@ -107,13 +107,13 @@ export const approveLeaveApplication = async (req: Request, res: Response): Prom
   try {
     const { id } = req.params;
     const { issuedBy } = req.body;
-    const existing = await prisma.leavePass.findUnique({ where: { id } });
+    const existing = await prisma.leavePass.findUnique({ where: { id: id as string } });
     if (!existing) { res.status(404).json({ message: 'Not found' }); return; }
     if (existing.status !== 'PENDING') { res.status(400).json({ message: 'Not a pending application' }); return; }
 
     const passNo = generatePassNo();
     const leave = await prisma.leavePass.update({
-      where: { id },
+      where: { id: id as string },
       data: { status: 'APPROVED', passNo, issuedBy: issuedBy || 'Admin' },
       include: { student: { include: { user: true } } }
     });
@@ -125,7 +125,7 @@ export const approveLeaveApplication = async (req: Request, res: Response): Prom
 export const rejectLeaveApplication = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const leave = await prisma.leavePass.update({ where: { id }, data: { status: 'REJECTED' } });
+    const leave = await prisma.leavePass.update({ where: { id: id as string }, data: { status: 'REJECTED' } });
     res.status(200).json({ message: 'Application rejected', leave });
   } catch (error) { res.status(500).json({ message: 'Server error', error }); }
 };
@@ -135,7 +135,7 @@ export const getLeaveStatusByRegNo = async (req: Request, res: Response): Promis
   try {
     const { regNo } = req.params;
     const student = await prisma.student.findUnique({
-      where: { regNo: regNo.toUpperCase() },
+      where: { regNo: String(regNo).toUpperCase() },
       include: { user: { select: { name: true } } }
     });
     if (!student) { res.status(404).json({ message: 'No student found with this Registration Number' }); return; }

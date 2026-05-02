@@ -64,7 +64,7 @@ export const deleteStaff = async (req: Request, res: Response): Promise<void> =>
     
     // Prevent self-deletion if needed (optional)
     
-    await prisma.user.delete({ where: { id } });
+    await prisma.user.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Staff member removed' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });

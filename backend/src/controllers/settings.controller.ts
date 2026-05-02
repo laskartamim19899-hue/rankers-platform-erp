@@ -48,13 +48,13 @@ export const updateSettings = async (req: Request, res: Response): Promise<void>
 export const waiveLateFee = async (req: Request, res: Response): Promise<void> => {
   try {
     const { feeId } = req.params;
-    const fee = await prisma.fee.findUnique({ where: { id: feeId } });
+    const fee = await prisma.fee.findUnique({ where: { id: feeId as string } });
     if (!fee) {
       res.status(404).json({ message: 'Fee not found' });
       return;
     }
     const updated = await prisma.fee.update({
-      where: { id: feeId },
+      where: { id: feeId as string },
       data: { lateFee: 0 }
     });
     res.status(200).json({ message: 'Late fee waived successfully', fee: updated });

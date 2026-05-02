@@ -39,7 +39,7 @@ export const createAnnouncement = async (req: Request, res: Response): Promise<v
 export const deleteAnnouncement = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    await prisma.announcement.delete({ where: { id } });
+    await prisma.announcement.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Announcement deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });

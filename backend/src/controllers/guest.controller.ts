@@ -34,7 +34,7 @@ export const updateGuestTeacher = async (req: Request, res: Response): Promise<v
   try {
     const { name, phone, email, subject, qualification, ratePerClass } = req.body;
     const teacher = await prisma.guestTeacher.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: { name, phone, email, subject, qualification, ratePerClass: parseFloat(ratePerClass) }
     });
     res.json(teacher);
@@ -46,7 +46,7 @@ export const updateGuestTeacher = async (req: Request, res: Response): Promise<v
 // DELETE guest teacher
 export const deleteGuestTeacher = async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.guestTeacher.delete({ where: { id: req.params.id } });
+    await prisma.guestTeacher.delete({ where: { id: req.params.id as string } });
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
@@ -114,7 +114,7 @@ export const disburseGuestPayment = async (req: Request, res: Response): Promise
 export const getGuestPayment = async (req: Request, res: Response): Promise<void> => {
   try {
     const payment = await prisma.guestPayment.findUnique({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       include: { guestTeacher: true }
     });
     if (!payment) { res.status(404).json({ message: 'Not found' }); return; }
@@ -128,7 +128,7 @@ export const getGuestPayment = async (req: Request, res: Response): Promise<void
 export const getGuestPaymentHistory = async (req: Request, res: Response): Promise<void> => {
   try {
     const payments = await prisma.guestPayment.findMany({
-      where: { guestTeacherId: req.params.id },
+      where: { guestTeacherId: req.params.id as string },
       orderBy: { paidAt: 'desc' },
       include: { guestTeacher: true }
     });
@@ -141,7 +141,7 @@ export const getGuestPaymentHistory = async (req: Request, res: Response): Promi
 // DELETE payment record
 export const deleteGuestPayment = async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.guestPayment.delete({ where: { id: req.params.id } });
+    await prisma.guestPayment.delete({ where: { id: req.params.id as string } });
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });

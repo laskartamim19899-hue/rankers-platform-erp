@@ -95,7 +95,7 @@ export const disburseSalary = async (req: Request, res: Response): Promise<void>
 export const getSalaryRecord = async (req: Request, res: Response): Promise<void> => {
   try {
     const record = await prisma.salaryRecord.findUnique({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       include: { staffProfile: { include: { user: true } } }
     });
     if (!record) { res.status(404).json({ message: 'Record not found' }); return; }
@@ -110,7 +110,7 @@ export const getStaffSalaryHistory = async (req: Request, res: Response): Promis
   try {
     const { profileId } = req.params;
     const records = await prisma.salaryRecord.findMany({
-      where: { staffProfileId: profileId },
+      where: { staffProfileId: profileId as string },
       orderBy: { paidAt: 'desc' },
       include: { staffProfile: { include: { user: true } } }
     });
@@ -123,7 +123,7 @@ export const getStaffSalaryHistory = async (req: Request, res: Response): Promis
 // DELETE salary record
 export const deleteSalaryRecord = async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.salaryRecord.delete({ where: { id: req.params.id } });
+    await prisma.salaryRecord.delete({ where: { id: req.params.id as string } });
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });

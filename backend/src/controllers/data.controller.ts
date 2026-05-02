@@ -58,36 +58,21 @@ export const resetAllData = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Disable FK checks for SQLite, wipe all tables, then re-enable
-    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = OFF');
+    // PostgreSQL compatible truncation with CASCADE to handle foreign keys
+    await prisma.$executeRawUnsafe(`
+      TRUNCATE TABLE 
+        "GuestPayment", "SalaryRecord", "StaffProfile", "GuestTeacher", 
+        "InventoryIssue", "InventoryItem", "LeavePass", "HostelAllocation", 
+        "Hostel", "Result", "Test", "Attendance", "TimetableSlot", 
+        "Timetable", "Payment", "Fee", "StudentCourse", "Student", 
+        "Batch", "Course", "Expense", "AdmissionInquiry", "Announcement"
+      RESTART IDENTITY CASCADE;
+    `);
 
-    try {
-      await prisma.$executeRawUnsafe('DELETE FROM "GuestPayment"');
-      await prisma.$executeRawUnsafe('DELETE FROM "SalaryRecord"');
-      await prisma.$executeRawUnsafe('DELETE FROM "StaffProfile"');
-      await prisma.$executeRawUnsafe('DELETE FROM "GuestTeacher"');
-      await prisma.$executeRawUnsafe('DELETE FROM "InventoryIssue"');
-      await prisma.$executeRawUnsafe('DELETE FROM "InventoryItem"');
-      await prisma.$executeRawUnsafe('DELETE FROM "LeavePass"');
-      await prisma.$executeRawUnsafe('DELETE FROM "HostelAllocation"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Hostel"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Result"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Test"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Attendance"');
-      await prisma.$executeRawUnsafe('DELETE FROM "TimetableSlot"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Timetable"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Payment"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Fee"');
-      await prisma.$executeRawUnsafe('DELETE FROM "StudentCourse"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Student"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Batch"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Course"');
-      await prisma.$executeRawUnsafe('DELETE FROM "Expense"');
-      await prisma.$executeRawUnsafe('DELETE FROM "AdmissionInquiry"');
-      await prisma.$executeRawUnsafe(`DELETE FROM "User" WHERE role != 'SUPER_ADMIN'`);
-    } finally {
-      await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON');
-    }
+    // Manually delete users except SUPER_ADMIN
+    await prisma.user.deleteMany({
+      where: { role: { not: 'SUPER_ADMIN' } }
+    });
 
     res.status(200).json({ message: 'All institution data has been reset successfully. Settings and SUPER_ADMIN account preserved.' });
   } catch (error) {

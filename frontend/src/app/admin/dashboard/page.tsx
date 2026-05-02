@@ -467,6 +467,18 @@ export default function AdminDashboard() {
               </div>
               <span className="material-symbols-outlined text-primary/50">chevron_right</span>
             </Link>
+            <Link href="/admin/students" className="w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors group cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 text-blue-700 rounded-lg group-hover:bg-blue-100">
+                  <span className="material-symbols-outlined">psychology</span>
+                </div>
+                <div className="flex-1">
+                  <span className="font-semibold text-sm block">Student Intelligence</span>
+                  <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">Master Database & Enrollment</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-slate-300">chevron_right</span>
+            </Link>
             <Link href="/admin/reports" className="w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors group cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-surface-variant text-blue-700 rounded-lg group-hover:bg-blue-100">

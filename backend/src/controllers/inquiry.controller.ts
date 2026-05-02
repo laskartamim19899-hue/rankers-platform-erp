@@ -42,7 +42,7 @@ export const updateInquiryStatus = async (req: Request, res: Response): Promise<
     const { id } = req.params;
     const { status } = req.body;
     const updated = await prisma.admissionInquiry.update({
-      where: { id },
+      where: { id: id as string },
       data: { status }
     });
     res.status(200).json(updated);
@@ -54,7 +54,7 @@ export const updateInquiryStatus = async (req: Request, res: Response): Promise<
 export const deleteInquiry = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    await prisma.admissionInquiry.delete({ where: { id } });
+    await prisma.admissionInquiry.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Inquiry deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
