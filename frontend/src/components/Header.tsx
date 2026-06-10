@@ -154,10 +154,16 @@ export default function Header({ transparent = false }) {
             ))}
           </div>
 
-          <Link href="/login" onClick={() => setMobileMenuOpen(false)}
-            className="inline-flex items-center h-12 px-10 rounded-full border border-white/20 text-white font-black uppercase tracking-widest text-sm mt-2">
-            Staff Login
-          </Link>
+          <div className="flex flex-col gap-3 mt-4 w-full px-10">
+            <Link href="/login" onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-center h-12 w-full rounded-full border border-white/20 text-white font-black uppercase tracking-widest text-sm">
+              Student Login
+            </Link>
+            <Link href="/admin/login" onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-center h-12 w-full rounded-full border border-white/5 text-slate-400 hover:text-white hover:border-white/20 font-black uppercase tracking-widest text-sm transition-all">
+              Staff Login
+            </Link>
+          </div>
         </div>
       </div>
     </>

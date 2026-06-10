@@ -1,0 +1,45 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const path_1 = __importDefault(require("path"));
+const dotenv_1 = __importDefault(require("dotenv"));
+const dns_1 = __importDefault(require("dns"));
+// Configure custom DNS server for node resolver to bypass local query refused DNS
+dns_1.default.setServers(['8.8.8.8', '8.8.4.4']);
+const originalLookup = dns_1.default.lookup;
+dns_1.default.lookup = function (hostname, options, callback) {
+    if (typeof options === 'function') {
+        callback = options;
+        options = {};
+    }
+    if (hostname && hostname.includes('neon.tech')) {
+        dns_1.default.resolve4(hostname, (err, addresses) => {
+            if (err || !addresses || addresses.length === 0) {
+                originalLookup(hostname, options, callback);
+            }
+            else {
+                const ip = addresses[0];
+                if (options && options.all) {
+                    callback(null, [{ address: ip, family: 4 }]);
+                }
+                else {
+                    callback(null, ip, 4);
+                }
+            }
+        });
+    }
+    else {
+        originalLookup(hostname, options, callback);
+    }
+};
+// Load .env with explicit path relative to __dirname so it works regardless of CWD
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../.env') });
+console.log('[STARTUP] DATABASE_URL set:', !!process.env.DATABASE_URL);
+const app_1 = __importDefault(require("./app"));
+const PORT = process.env.PORT || 5000;
+app_1.default.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+//# sourceMappingURL=index.js.map

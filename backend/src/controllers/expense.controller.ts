@@ -3,7 +3,7 @@ import prisma from '../prisma';
 
 export const createExpense = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, category, amount, description, date, payeeName, purpose } = req.body;
+    const { title, category, amount, description, date, payeeName, purpose, fundSource } = req.body;
     const expense = await prisma.expense.create({
       data: {
         title,
@@ -12,6 +12,7 @@ export const createExpense = async (req: Request, res: Response): Promise<void> 
         description,
         payeeName,
         purpose,
+        fundSource: fundSource || "GENERAL",
         date: new Date(date || new Date())
       }
     });
@@ -51,6 +52,40 @@ export const deleteExpense = async (req: Request, res: Response): Promise<void> 
     const { id } = req.params;
     await prisma.expense.delete({ where: { id: id as string } });
     res.status(200).json({ message: 'Expense deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+// Category Controllers
+export const getCategories = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const categories = await prisma.expenseCategory.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.status(200).json(categories);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const createCategory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name } = req.body;
+    const category = await prisma.expenseCategory.create({
+      data: { name: name.toUpperCase() }
+    });
+    res.status(201).json(category);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    await prisma.expenseCategory.delete({ where: { id: id as string } });
+    res.status(200).json({ message: 'Category deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
   }

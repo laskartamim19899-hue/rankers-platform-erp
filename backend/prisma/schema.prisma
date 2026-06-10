@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -58,6 +59,10 @@ model Student {
   leavePasses     LeavePass[]
   inventoryIssues InventoryIssue[]
   scholarshipTier String?          // MERIT_A, MERIT_B, MERIT_C, NONE
+
+  transportAlloc  TransportAllocation?
+  certificates    CertificateRecord[]
+  cbtAttempts     CbtAttempt[]
 }
 
 model Course {
@@ -83,6 +88,7 @@ model Batch {
   attendances Attendance[]
   timetable   Timetable?
   studentCourses StudentCourse[]
+  cbtExams    CbtExam[] @relation("BatchExams")
 }
 
 model StudentCourse {
@@ -177,12 +183,19 @@ model HostelAllocation {
 model Expense {
   id          String   @id @default(uuid())
   title       String
-  category    String   // SALARY, RENT, FOOD, OTHER
+  category    String   // Reference to ExpenseCategory.name
   amount      Float
   date        DateTime
   description String?
   payeeName   String?
   purpose     String?
+  fundSource  String   @default("GENERAL") // GENERAL, RESERVE
+}
+
+model ExpenseCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
 }
 
 model Announcement {
@@ -207,6 +220,7 @@ model InstitutionSettings {
   gstNumber        String? 
   tagline          String? @default("Empowering Future Leaders")
   principalName    String?
+  reserveFundPercentage Float @default(60)
   updatedAt        DateTime @updatedAt
 }
 
@@ -344,4 +358,151 @@ model GuestPayment {
   remarks        String?
   paidAt         DateTime     @default(now())
   status         String       @default("PAID")
+}
+
+model Vehicle {
+  id              String   @id @default(uuid())
+  registrationNo  String   @unique
+  capacity        Int
+  driverName      String
+  driverPhone     String?
+  allocations     TransportAllocation[]
+}
+
+model Route {
+  id              String   @id @default(uuid())
+  name            String
+  stops           String   // E.g. "StopA, StopB, StopC"
+  monthlyFee      Float
+  allocations     TransportAllocation[]
+}
+
+model TransportAllocation {
+  id          String   @id @default(uuid())
+  studentId   String   @unique
+  vehicleId   String
+  routeId     String
+  startDate   DateTime @default(now())
+  student     Student  @relation(fields: [studentId], references: [id])
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id])
+  route       Route    @relation(fields: [routeId], references: [id])
+}
+
+model CertificateRecord {
+  id              String   @id @default(uuid())
+  studentId       String
+  type            String   // BONAFIDE, TRANSFER, LEAVING
+  issueDate       DateTime @default(now())
+  referenceNumber String   @unique
+  issuedBy        String
+  remarks         String?
+  student         Student  @relation(fields: [studentId], references: [id])
+}
+
+model OtherIncome {
+  id            String   @id @default(uuid())
+  title         String
+  category      String   // DONATION, SPONSORSHIP, SCRAP_SALE, INVESTMENT, OTHER
+  amount        Float
+  date          DateTime @default(now())
+  description   String?
+  receivedFrom  String?
+  paymentMode   String   @default("CASH") // CASH, UPI, ONLINE, CHEQUE
+  transactionId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// --- CBT Exam System Models ---
+
+model Question {
+  id            String   @id @default(uuid())
+  content       String   // Question text (supports LaTeX)
+  type          String   @default("MCQ") // MCQ, MULTI_SELECT, INTEGER
+  subject       String   // PHYSICS, CHEMISTRY, BIOLOGY, MATHS
+  topic         String?
+  subTopic      String?
+  difficulty    String   @default("MEDIUM") // EASY, MEDIUM, HARD
+  
+  options       Json     // Array of options: [{id: 'A', text: '...', isCorrect: boolean}]
+  correctOption String   // ID of the correct option
+  explanation   String?
+  imageUrl      String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  examQuestions CbtExamQuestion[]
+  responses     CbtResponse[]
+}
+
+model CbtExam {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  startTime     DateTime
+  endTime       DateTime
+  duration      Int      // In minutes
+  totalMarks    Int
+  
+  // Marking Scheme
+  positiveMarks Float    @default(4)
+  negativeMarks Float    @default(1)
+  
+  status        String   @default("DRAFT") // DRAFT, PUBLISHED, COMPLETED
+  examPattern   String   @default("STANDARD") // STANDARD, NEET_NTA
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  questions     CbtExamQuestion[]
+  attempts      CbtAttempt[]
+  batches       Batch[]          @relation("BatchExams")
+}
+
+model CbtExamQuestion {
+  id         String   @id @default(uuid())
+  examId     String
+  questionId String
+  order      Int      @default(0)
+  section    String?  // Section A, Section B (for NEET pattern)
+  
+  exam       CbtExam  @relation(fields: [examId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id])
+
+  @@unique([examId, questionId])
+}
+
+model CbtAttempt {
+  id          String   @id @default(uuid())
+  studentId   String
+  examId      String
+  startTime   DateTime @default(now())
+  submitTime  DateTime?
+  score       Float    @default(0)
+  status      String   @default("STARTED") // STARTED, SUBMITTED, EVALUATED
+  
+  securityAlerts Int    @default(0)
+  isTerminated   Boolean @default(false)
+  lastHeartbeat  DateTime?
+  
+  student     Student  @relation(fields: [studentId], references: [id])
+  exam        CbtExam  @relation(fields: [examId], references: [id])
+  responses   CbtResponse[]
+
+  @@unique([studentId, examId])
+}
+
+model CbtResponse {
+  id           String   @id @default(uuid())
+  attemptId    String
+  questionId   String
+  selectedOption String? // ID of the option selected
+  isCorrect    Boolean?
+  timeSpent    Int      @default(0) // Seconds spent on this question
+  
+  attempt      CbtAttempt @relation(fields: [attemptId], references: [id])
+  question     Question   @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
 }

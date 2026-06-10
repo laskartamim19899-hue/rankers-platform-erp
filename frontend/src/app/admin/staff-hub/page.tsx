@@ -373,7 +373,16 @@ function GuestTeacherTab() {
     } catch { alert("Failed to save"); } finally { setSaving(false); }
   };
 
-  const handleDelete = async (id: string) => { if (!confirm("Delete guest teacher?")) return; try { await guestApi.remove(id); setSelected(null); fetchAll(); } catch { alert("Failed"); } };
+  const handleDelete = async (id: string) => { 
+    if (!confirm("WIPE TEACHER DATA? This will permanently delete the teacher profile, ALL payment history, and ALL associated ledger/expense records. This cannot be undone! Proceed?")) return; 
+    try { 
+      await guestApi.remove(id); 
+      setSelected(null); 
+      fetchAll(); 
+    } catch { 
+      alert("Failed to wipe teacher data."); 
+    } 
+  };
 
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault(); if (!selected) return; setPaying(true);
@@ -381,7 +390,19 @@ function GuestTeacherTab() {
     catch { alert("Failed"); } finally { setPaying(false); }
   };
 
-  const handleDeletePayment = async (pid: string) => { if (!confirm("Delete payment?")) return; try { await guestApi.deletePayment(pid); if(selected){const r=await guestApi.getHistory(selected.id); setHistory(r.data);} } catch { alert("Failed"); } };
+  const handleDeletePayment = async (pid: string) => {
+    if (!confirm("Delete payment record and ledger entry?")) return;
+    try {
+      await guestApi.deletePayment(pid);
+      if (selected) { 
+        const r = await guestApi.getHistory(selected.id); 
+        setHistory(r.data); 
+        setTotalPaid(r.data.filter((p: any) => p.status === 'PAID').reduce((s: number, p: any) => s + p.totalAmount, 0));
+      }
+    } catch (err: any) { 
+      alert(err.response?.data?.message || "Failed to delete"); 
+    }
+  };
 
   const classAmt = parseFloat(classesHeld || "0") * parseFloat(ratePerClass || "0");
   const total = classAmt + parseFloat(allowances || "0");
@@ -464,7 +485,7 @@ function GuestTeacherTab() {
                     <div className="space-y-2">{history.map(p => (
                       <div key={p.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border">
                         <div><p className="font-black text-slate-800 text-sm">{p.month}</p><p className="text-[10px] text-slate-400 font-bold uppercase">{p.classesHeld} classes × ₹{p.ratePerClass}</p></div>
-                        <div className="flex items-center gap-3"><p className="font-black text-emerald-600">₹{p.totalAmount.toLocaleString()}</p><Link href={`/guest-slip/${p.id}`} className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center hover:bg-orange-600 hover:text-white"><span className="material-symbols-outlined text-sm">print</span></Link><button onClick={() => handleDeletePayment(p.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white"><span className="material-symbols-outlined text-sm">delete</span></button></div>
+                        <div className="flex items-center gap-3"><p className="font-black text-emerald-600">₹{p.totalAmount.toLocaleString()}</p><Link href={`/guest-slip/${p.id}`} className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center hover:bg-orange-600 hover:text-white"><span className="material-symbols-outlined text-sm">print</span></Link><button type="button" onClick={(e) => { e.stopPropagation(); handleDeletePayment(p.id); }} className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white"><span className="material-symbols-outlined text-sm">delete</span></button></div>
                       </div>
                     ))}</div>
                   </div>

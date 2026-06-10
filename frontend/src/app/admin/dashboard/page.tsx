@@ -91,6 +91,10 @@ export default function AdminDashboard() {
     
     fetchStats();
     fetchNotifications();
+
+    // Poll every 30 seconds so LIVE count badge stays accurate
+    const liveInterval = setInterval(fetchStats, 30_000);
+    return () => clearInterval(liveInterval);
   }, [router]);
 
   const getFullUrl = (url: string) => {
@@ -182,6 +186,10 @@ export default function AdminDashboard() {
             </p>
           </div>
           <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            <Link href="/admin/academics/cbt" className="bg-indigo-600 text-white px-6 h-12 rounded-2xl flex items-center gap-2 text-sm font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-200 hover:bg-indigo-700">
+              <span className="material-symbols-outlined text-[18px]">computer</span>
+              CBT System
+            </Link>
             <form onSubmit={handleSearch} className="relative group">
               <input 
                 type="text" 
@@ -244,49 +252,76 @@ export default function AdminDashboard() {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
                     <span className="material-symbols-outlined text-red-500 text-sm">warning</span>
-                    Current Outstanding Dues
+                    All Pending Dues
                   </h3>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded">Past & Current Months Only</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded">All Pending & Future</span>
                 </div>
                 <div className="space-y-3">
-                  {searchResult.fees.length > 0 ? searchResult.fees.map((fee: any) => (
-                    <div key={fee.id} className="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
-                      <div>
-                        <p className="text-xs font-black text-slate-900">{fee.type} FEE</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{fee.month || 'ACADEMIC'} • DUE {new Date(fee.dueDate).toLocaleDateString()}</p>
-                        {fee.status === 'PARTIAL' && (
-                          <p className="text-[9px] text-orange-600 font-black uppercase mt-0.5">Partial Payment Made</p>
-                        )}
+                  {searchResult.fees.length > 0 ? searchResult.fees.map((fee: any) => {
+                    const isOverdue = new Date(fee.dueDate) <= new Date();
+                    const paid = (fee.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+                    const gross = fee.amount + (fee.lateFee || 0);
+                    const remaining = Math.max(0, gross - paid);
+                    return (
+                      <div key={fee.id} className={`bg-white p-4 rounded-xl border flex justify-between items-center shadow-sm ${isOverdue ? 'border-red-200' : 'border-blue-100'}`}>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-xs font-black text-slate-900">{fee.type} FEE</p>
+                            {isOverdue ? (
+                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">OVERDUE</span>
+                            ) : (
+                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">UPCOMING</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{fee.month || 'ACADEMIC'} • DUE {new Date(fee.dueDate).toLocaleDateString()}</p>
+                          {fee.status === 'PARTIAL' && (
+                            <p className="text-[9px] text-orange-600 font-black uppercase mt-0.5">Partial Payment Made</p>
+                          )}
+                          {fee.lateFee > 0 && (
+                            <p className="text-[9px] text-red-500 font-black mt-0.5">+₹{fee.lateFee} late fine</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-black ${isOverdue ? 'text-red-600' : 'text-blue-700'}`}>₹{remaining.toLocaleString()}</p>
+                          {paid > 0 && <p className="text-[9px] text-emerald-600 font-bold">₹{paid.toLocaleString()} paid</p>}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        {(() => {
-                          const paid = (fee.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
-                          const gross = fee.amount + (fee.lateFee || 0);
-                          const remaining = Math.max(0, gross - paid);
-                          return (
-                            <>
-                              <p className="text-lg font-black text-red-600">₹{remaining.toLocaleString()}</p>
-                              {paid > 0 && <p className="text-[9px] text-emerald-600 font-bold">₹{paid.toLocaleString()} paid</p>}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  )) : (
+                    );
+                  }) : (
                     <div className="text-center py-6">
-                      <p className="text-sm font-black text-emerald-600 uppercase">No Pending Dues for Current Cycle</p>
+                      <p className="text-sm font-black text-emerald-600 uppercase">✅ No Pending Dues — All Clear!</p>
                     </div>
                   )}
                 </div>
-                {searchResult.fees.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
-                    <p className="text-xs font-black text-slate-500">TOTAL REMAINING PAYABLE</p>
-                    <p className="text-xl font-black text-red-600">₹{searchResult.fees.reduce((sum: number, f: any) => {
-                      const paid = (f.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
-                      return sum + Math.max(0, (f.amount + (f.lateFee || 0)) - paid);
-                    }, 0).toLocaleString()}</p>
-                  </div>
-                )}
+                {searchResult.fees.length > 0 && (() => {
+                  const today = new Date();
+                  let overdueTotal = 0;
+                  let futureTotal = 0;
+                  searchResult.fees.forEach((f: any) => {
+                    const paid = (f.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+                    const remaining = Math.max(0, (f.amount + (f.lateFee || 0)) - paid);
+                    if (new Date(f.dueDate) <= today) overdueTotal += remaining;
+                    else futureTotal += remaining;
+                  });
+                  return (
+                    <div className="mt-4 pt-4 border-t border-slate-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] font-black text-red-500 uppercase">🔴 Overdue Now</p>
+                        <p className="text-sm font-black text-red-600">₹{overdueTotal.toLocaleString()}</p>
+                      </div>
+                      {futureTotal > 0 && (
+                        <div className="flex justify-between items-center">
+                          <p className="text-[10px] font-black text-blue-500 uppercase">🔵 Future Upcoming</p>
+                          <p className="text-sm font-black text-blue-600">₹{futureTotal.toLocaleString()}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                        <p className="text-[10px] font-black text-slate-600 uppercase">Total Outstanding</p>
+                        <p className="text-xl font-black text-slate-900">₹{(overdueTotal + futureTotal).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
@@ -296,31 +331,46 @@ export default function AdminDashboard() {
         )}
 
         {/* Top Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Stat 1 */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-surface-variant text-blue-700 rounded-lg">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          {/* Stat 1 - Live Student Count */}
+          <Link href="/admin/students" className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-between hover:border-blue-400 transition-all cursor-pointer group">
+            <div className="flex justify-between items-start mb-3">
+              <div className="p-2 bg-blue-50 text-blue-700 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
                 <span className="material-symbols-outlined">group</span>
               </div>
-              <span className="text-secondary font-bold text-xs flex items-center bg-secondary-container/20 px-2 py-0.5 rounded-full">
-                +12.5% <span className="material-symbols-outlined text-[14px] ml-1">trending_up</span>
-              </span>
+              <div className="flex flex-col items-end gap-1">
+                <span className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                  LIVE COUNT
+                </span>
+                {stats?.hostelStudents != null && (
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full">
+                    🏠 {stats.hostelStudents} Hostel
+                  </span>
+                )}
+              </div>
             </div>
             <div>
               <p className="text-slate-500 font-label-caps text-[12px] font-semibold tracking-wider uppercase mb-1">
-                Total Students
+                Active Students
               </p>
-              <h2 className="text-3xl font-bold text-primary">{stats?.totalStudents?.toLocaleString() || 0}</h2>
+              <h2 className="text-3xl font-bold text-primary">
+                {stats?.liveActiveStudents?.toLocaleString() ?? stats?.totalStudents?.toLocaleString() ?? 0}
+              </h2>
+              <p className="text-[10px] text-slate-400 font-bold mt-1 flex items-center gap-1 group-hover:text-blue-500 transition-colors">
+                View All <span className="material-symbols-outlined text-xs group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+              </p>
             </div>
-          </div>
+          </Link>
           {/* Stat 2 */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <Link href="/admin/reports/collections" className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-emerald-500 transition-all cursor-pointer group">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg">
+              <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-all">
                 <span className="material-symbols-outlined">payments</span>
               </div>
-              <span className="text-emerald-600 font-bold text-xs">Live Flow</span>
+              <span className="text-emerald-600 font-bold text-xs flex items-center gap-1">
+                Live Flow <span className="material-symbols-outlined text-xs group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </span>
             </div>
             <div>
               <p className="text-slate-500 font-label-caps text-[12px] font-semibold tracking-wider uppercase mb-1">
@@ -328,21 +378,29 @@ export default function AdminDashboard() {
               </p>
               <h2 className="text-3xl font-bold text-primary">₹{stats?.collected?.toLocaleString() || 0}</h2>
             </div>
-          </div>
+          </Link>
           {/* Stat 3 */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <Link href="/admin/reports/defaulters" className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-red-500 transition-all cursor-pointer group">
             <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-red-50 text-red-700 rounded-lg">
+              <div className="p-2 bg-red-50 text-red-700 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-all">
                 <span className="material-symbols-outlined">account_balance_wallet</span>
               </div>
+              <span className="text-red-600 font-bold text-xs flex items-center gap-1">
+                Tracking <span className="material-symbols-outlined text-xs group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </span>
             </div>
             <div>
               <p className="text-slate-500 font-label-caps text-[12px] font-semibold tracking-wider uppercase mb-1">
-                Pending Dues
+                Overdue Dues
               </p>
-              <h2 className="text-3xl font-bold text-red-600">₹{stats?.pending?.toLocaleString() || 0}</h2>
+              <h2 className="text-3xl font-bold text-red-600">₹{(stats?.pendingOverdue ?? stats?.pending ?? 0).toLocaleString()}</h2>
+              {stats?.totalOutstanding != null && stats.totalOutstanding !== stats?.pendingOverdue && (
+                <p className="text-[10px] text-slate-400 font-bold mt-1">
+                  Total Outstanding: ₹{stats.totalOutstanding.toLocaleString()}
+                </p>
+              )}
             </div>
-          </div>
+          </Link>
           {/* Stat 4 */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
             <div className="flex justify-between items-start mb-4">
@@ -357,6 +415,60 @@ export default function AdminDashboard() {
               </p>
               <h2 className="text-3xl font-bold text-primary">
                 {stats?.topPerformers?.toLocaleString() || 0} <span className="text-body-md font-normal text-slate-400">Students</span>
+              </h2>
+            </div>
+          </div>
+          {/* Stat 5 - Reserve Fund */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-purple-50 text-purple-700 rounded-lg">
+                <span className="material-symbols-outlined">savings</span>
+              </div>
+              <div className="text-right">
+                <span className="text-purple-600 font-bold text-[10px] bg-purple-50 px-2 py-0.5 rounded-full block mb-1">
+                  {stats?.reserveFund?.percentage || 60}% of Academics
+                </span>
+                <span className="text-slate-400 font-bold text-[8px] uppercase tracking-widest block">
+                  ₹{stats?.reserveFund?.spent?.toLocaleString() || 0} Used
+                </span>
+              </div>
+            </div>
+            <div>
+              <p className="text-slate-500 font-label-caps text-[12px] font-semibold tracking-wider uppercase mb-1">
+                Reserve Available
+              </p>
+              <h2 className="text-3xl font-bold text-purple-600">₹{stats?.reserveFund?.available?.toLocaleString() || 0}</h2>
+            </div>
+          </div>
+          {/* Stat 6 - General Fund */}
+          <div className={`bg-white p-5 rounded-2xl border ${stats?.generalFund?.available < 0 ? 'border-red-200 bg-red-50/10' : 'border-slate-200'} shadow-sm flex flex-col justify-between`}>
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-2 rounded-lg ${stats?.generalFund?.available < 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+                <span className="material-symbols-outlined">{stats?.generalFund?.available < 0 ? 'warning' : 'account_balance'}</span>
+              </div>
+              <div className="text-right">
+                {stats?.generalFund?.available < 0 ? (
+                  <span className="text-red-700 font-bold text-[10px] bg-red-100 px-2 py-0.5 rounded-full block mb-1 animate-pulse">
+                    Deficit Alert
+                  </span>
+                ) : (
+                  <span className="text-slate-600 font-bold text-[10px] bg-slate-100 px-2 py-0.5 rounded-full block mb-1">
+                    Operating Fund
+                  </span>
+                )}
+                <span className="text-slate-400 font-bold text-[8px] uppercase tracking-widest block">
+                  ₹{stats?.generalFund?.spent?.toLocaleString() || 0} Used
+                </span>
+              </div>
+            </div>
+            <div>
+              <p className="text-slate-500 font-label-caps text-[12px] font-semibold tracking-wider uppercase mb-1">
+                General Fund Available
+              </p>
+              <h2 className={`text-3xl font-bold ${stats?.generalFund?.available < 0 ? 'text-red-600' : 'text-slate-700'}`}>
+                {stats?.generalFund?.available < 0 
+                  ? `-₹${Math.abs(stats.generalFund.available).toLocaleString()}` 
+                  : `₹${stats?.generalFund?.available?.toLocaleString() || 0}`}
               </h2>
             </div>
           </div>
@@ -455,6 +567,18 @@ export default function AdminDashboard() {
             <h4 className="font-label-caps text-slate-500 uppercase tracking-widest text-[10px] font-semibold">
               Operations
             </h4>
+            <Link href="/admin/academics/cbt" className="w-full flex items-center justify-between p-4 bg-indigo-600 border border-indigo-500 rounded-xl hover:bg-indigo-700 transition-colors group cursor-pointer text-white shadow-lg shadow-indigo-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/10 text-white rounded-lg group-hover:bg-white/20">
+                  <span className="material-symbols-outlined">computer</span>
+                </div>
+                <div>
+                  <span className="font-bold text-sm block">CBT Exam Engine</span>
+                  <span className="text-[10px] text-indigo-100 font-black uppercase tracking-widest">NTA/NEET Mock Test Manager</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-white/50 group-hover:text-white transition-colors">chevron_right</span>
+            </Link>
             <Link href="/admin/transactions" className="w-full flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 transition-colors group cursor-pointer shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-primary text-white rounded-lg">
@@ -511,9 +635,21 @@ export default function AdminDashboard() {
                 <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg group-hover:bg-emerald-100">
                   <span className="material-symbols-outlined">payments</span>
                 </div>
-                <span className="font-semibold text-sm">Record Student Payment</span>
+                <span className="font-semibold text-sm">Record Fees & Income</span>
               </div>
               <span className="material-symbols-outlined text-slate-300">chevron_right</span>
+            </Link>
+            <Link href="/admin/finance/other-income" className="w-full flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors group cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg group-hover:bg-emerald-200">
+                  <span className="material-symbols-outlined">account_balance</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-sm block">Income & Investments</span>
+                  <span className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Add Misc. Revenue</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-emerald-500">chevron_right</span>
             </Link>
             <Link href="/admin/finance/ledger" className="w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors group cursor-pointer">
               <div className="flex items-center gap-3">
@@ -671,6 +807,30 @@ export default function AdminDashboard() {
               </div>
               <span className="material-symbols-outlined text-slate-500 group-hover:text-white transition-colors">chevron_right</span>
             </Link>
+            <Link href="/admin/transport" className="w-full flex items-center justify-between p-4 bg-cyan-50 border border-cyan-200 rounded-xl hover:bg-cyan-100 transition-colors group cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-cyan-100 text-cyan-700 rounded-lg group-hover:bg-cyan-200">
+                  <span className="material-symbols-outlined">directions_bus</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-sm block">Transport Management</span>
+                  <span className="text-[10px] text-cyan-600 font-black uppercase tracking-widest">Vehicles, Routes & Allocations</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-cyan-400">chevron_right</span>
+            </Link>
+            <Link href="/admin/certificates" className="w-full flex items-center justify-between p-4 bg-fuchsia-50 border border-fuchsia-200 rounded-xl hover:bg-fuchsia-100 transition-colors group cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-fuchsia-100 text-fuchsia-700 rounded-lg group-hover:bg-fuchsia-200">
+                  <span className="material-symbols-outlined">workspace_premium</span>
+                </div>
+                <div>
+                  <span className="font-semibold text-sm block">Document & Certificate Hub</span>
+                  <span className="text-[10px] text-fuchsia-600 font-black uppercase tracking-widest">Issue TCs, Bonafides, etc.</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-fuchsia-400">chevron_right</span>
+            </Link>
           </div>
           {/* Recent Activity Feed */}
           <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -786,6 +946,10 @@ export default function AdminDashboard() {
         <Link href="/admin/finance" className="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-3 py-1 hover:text-secondary dark:hover:text-blue-300 tap-highlight-transparent active:scale-90 transition-transform">
           <span className="material-symbols-outlined">payments</span>
           <span className="font-inter text-[10px] font-medium">Finance</span>
+        </Link>
+        <Link href="/admin/academics/cbt" className="flex flex-col items-center justify-center text-indigo-600 dark:text-indigo-400 px-3 py-1 hover:text-indigo-800 tap-highlight-transparent active:scale-90 transition-transform font-bold">
+          <span className="material-symbols-outlined">computer</span>
+          <span className="font-inter text-[10px] font-medium">CBT</span>
         </Link>
         <Link href="/admin/announcements" className="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-3 py-1 hover:text-secondary dark:hover:text-blue-300 tap-highlight-transparent active:scale-90 transition-transform">
           <span className="material-symbols-outlined">campaign</span>

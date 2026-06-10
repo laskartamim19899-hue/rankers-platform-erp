@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { getStudentFees, recordPayment, getAllDues, allocateFee, getPayment, deletePayment, getStudentLedger } from '../controllers/finance.controller';
+import { getStudentFees, recordPayment, getAllDues, getAllPendingFees, allocateFee, getPayment, deletePayment, getStudentLedger } from '../controllers/finance.controller';
 import { authenticate, authorize } from '../middleware/auth';
 
 const router = Router();
 
 router.get('/ledger/search', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT']), getStudentLedger);
 router.get('/student/:studentId', authenticate, getStudentFees);
+router.get('/all-pending', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT']), getAllPendingFees);
 router.post('/payment', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT']), recordPayment);
 router.get('/dues', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT']), getAllDues);
 router.post('/allocate', authenticate, authorize(['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT']), allocateFee);

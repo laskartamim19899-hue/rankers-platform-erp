@@ -22,8 +22,9 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
 export const authorize = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const user = (req as any).user;
-    console.log('Authorize check:', { requiredRoles: roles, userRole: user?.role });
+    console.log(`[AUTH] Checking ${req.method} ${req.url} for user ${user?.role}. Required: ${roles}`);
     if (!user || !roles.includes(user.role)) {
+      console.warn(`[AUTH] Access Denied for ${user?.role} on ${req.method} ${req.url}`);
       res.status(403).json({ message: 'Forbidden' });
       return;
     }

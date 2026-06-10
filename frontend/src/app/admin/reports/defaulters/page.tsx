@@ -96,13 +96,31 @@ export default function DefaultersReport() {
             <div>
               <h2 className="text-lg font-black text-slate-800">Defaulter Audit List</h2>
               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Total Outstanding: {filteredDues.length} Cases</p>
-              <p className="text-sm font-black text-red-600 mt-1">
-                ₹{filteredDues.reduce((sum: number, d: any) => {
-                  const gross = d.amount + (d.lateFee || 0);
+              {(() => {
+                const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+                let overdueTot = 0, futureTot = 0;
+                filteredDues.forEach((d: any) => {
                   const paid = (d.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
-                  return sum + Math.max(0, gross - paid);
-                }, 0).toLocaleString()} Total Remaining
-              </p>
+                  const rem = Math.max(0, (d.amount + (d.lateFee || 0)) - paid);
+                  if (new Date(d.dueDate) <= todayMid) overdueTot += rem;
+                  else futureTot += rem;
+                });
+                return (
+                  <div className="flex gap-4 mt-2 flex-wrap">
+                    <span className="text-sm font-black text-red-600">
+                      🔴 ₹{overdueTot.toLocaleString()} <span className="text-[10px] font-bold text-red-400 uppercase">Overdue</span>
+                    </span>
+                    {futureTot > 0 && (
+                      <span className="text-sm font-black text-blue-600">
+                        🔵 ₹{futureTot.toLocaleString()} <span className="text-[10px] font-bold text-blue-400 uppercase">Upcoming</span>
+                      </span>
+                    )}
+                    <span className="text-sm font-black text-slate-700">
+                      ⚡ ₹{(overdueTot + futureTot).toLocaleString()} <span className="text-[10px] font-bold text-slate-400 uppercase">Total</span>
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div className="text-right print:hidden">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status: Unpaid</span>
@@ -142,6 +160,11 @@ export default function DefaultersReport() {
                           {due.type}
                         </span>
                         {due.month && <span className="text-[9px] font-black text-slate-400">{due.month}</span>}
+                        {new Date(due.dueDate) <= new Date() ? (
+                          <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">OVERDUE</span>
+                        ) : (
+                          <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">UPCOMING</span>
+                        )}
                       </div>
                       <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1">Due: {new Date(due.dueDate).toLocaleDateString()}</p>
                     </td>

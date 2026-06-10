@@ -18,10 +18,23 @@ export default function StudentDatabase() {
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterCourse, setFilterCourse] = useState("ALL");
 
+  const handleResetPassword = async (userId: string, studentName: string) => {
+    if (!confirm(`Are you sure you want to reset the password for ${studentName}? The new password will be 'student123'.`)) return;
+    try {
+      await authApi.adminResetPassword(userId, "student123");
+      alert("Password reset successfully to: student123");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message;
+      alert(`RESET FAILED: ${msg}`);
+      console.error("Reset Error Details:", err.response?.data);
+    }
+  };
+
   const handleExport = () => {
     const exportData = filteredStudents.map(s => ({
       "Registration Number": s.regNo || "PENDING",
       "Student Name": s.user.name,
+      "Email (Login ID)": s.user.email,
       "Course": s.courses?.map((c: any) => c.course?.name).join(', ') || "N/A",
       "Phone": s.phone,
       "Guardian Name": s.guardianName,
@@ -84,9 +97,8 @@ export default function StudentDatabase() {
   const handleApprove = async (id: string) => {
     if (!confirm("Approve this student? They will be issued a unique Registration Number.")) return;
     try {
-      await studentApi.approve(id);
-      fetchInitialData();
-      alert("Student approved successfully!");
+      const res = await studentApi.approve(id);
+      router.push(`/admin/students/approval-success/${id}`);
     } catch (err) { alert("Failed to approve student"); }
   };
 
@@ -157,7 +169,7 @@ export default function StudentDatabase() {
           {/* Status Pills */}
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Filter by Status:</span>
-            {["ALL", "APPROVED", "PENDING"].map((status) => (
+            {["ALL", "APPROVED", "PENDING", "INACTIVE"].map((status) => (
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
@@ -208,6 +220,7 @@ export default function StudentDatabase() {
                           <span className="text-[9px] font-black uppercase text-slate-300 tracking-tighter">Issue Pending</span>
                         )}
                         <p className="text-[10px] text-slate-400 font-bold">{student.phone}</p>
+                        <p className="text-[10px] text-indigo-600 font-black italic">{student.user.email}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -228,6 +241,7 @@ export default function StudentDatabase() {
                       <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border shadow-sm ${
                         student.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                         student.status === 'PENDING' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                        student.status === 'INACTIVE' ? 'bg-slate-50 text-slate-600 border-slate-200' :
                         'bg-red-50 text-red-600 border-red-100'
                       }`}>
                         {student.status}
@@ -244,6 +258,13 @@ export default function StudentDatabase() {
                             <span className="material-symbols-outlined text-lg">verified</span>
                           </button>
                         )}
+                        <button 
+                          onClick={() => handleResetPassword(student.user.id, student.user.name)}
+                          className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex items-center justify-center border border-amber-100 hover:shadow-lg hover:shadow-amber-200"
+                          title="Reset Password"
+                        >
+                          <span className="material-symbols-outlined text-lg">key</span>
+                        </button>
                         <Link 
                           href={`/admin/students/${student.id}`} 
                           className="w-10 h-10 rounded-xl bg-blue-50 text-primary hover:bg-primary hover:text-white transition-all flex items-center justify-center border border-blue-100 hover:shadow-lg hover:shadow-primary/20"
@@ -258,6 +279,13 @@ export default function StudentDatabase() {
                         >
                           <span className="material-symbols-outlined text-lg">trending_up</span>
                         </button>
+                        <Link 
+                          href={`/admin/students/approval-success/${student.id}`}
+                          className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center border border-slate-200 hover:shadow-lg"
+                          title="Print Registration Page"
+                        >
+                          <span className="material-symbols-outlined text-lg">print</span>
+                        </Link>
                         <Link 
                           href={`/admin/students/${student.id}/edit`} 
                           className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex items-center justify-center border border-amber-100 hover:shadow-lg hover:shadow-amber-200"

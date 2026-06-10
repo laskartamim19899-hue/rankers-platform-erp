@@ -1,0 +1,13 @@
+import { Request, Response } from 'express';
+export declare const createQuestion: (req: Request, res: Response) => Promise<void>;
+export declare const getQuestions: (req: Request, res: Response) => Promise<void>;
+export declare const createExam: (req: Request, res: Response) => Promise<void>;
+export declare const getExams: (req: Request, res: Response) => Promise<void>;
+export declare const getStudentExams: (req: Request, res: Response) => Promise<void>;
+export declare const startAttempt: (req: Request, res: Response) => Promise<void>;
+export declare const saveResponse: (req: Request, res: Response) => Promise<void>;
+export declare const submitExam: (req: Request, res: Response) => Promise<void>;
+export declare const getAttemptResult: (req: Request, res: Response) => Promise<void>;
+export declare const updateHeartbeat: (req: Request, res: Response) => Promise<void>;
+export declare const getLiveAttempts: (req: Request, res: Response) => Promise<void>;
+export declare const terminateAttempt: (req: Request, res: Response) => Promise<void>;

@@ -21,7 +21,7 @@ export const getSettings = async (req: Request, res: Response): Promise<void> =>
 
 export const updateSettings = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { lateFeePerDay, gracePeriodDays, lateFeeEnabled, institutionName, phone, email, website, address, gstNumber, tagline, principalName } = req.body;
+    const { lateFeePerDay, gracePeriodDays, lateFeeEnabled, institutionName, phone, email, website, address, gstNumber, tagline, principalName, reserveFundPercentage } = req.body;
     const settings = await prisma.institutionSettings.upsert({
       where: { id: 'singleton' },
       update: {
@@ -36,6 +36,7 @@ export const updateSettings = async (req: Request, res: Response): Promise<void>
         ...(gstNumber !== undefined && { gstNumber }),
         ...(tagline !== undefined && { tagline }),
         ...(principalName !== undefined && { principalName }),
+        ...(reserveFundPercentage !== undefined && { reserveFundPercentage: parseFloat(reserveFundPercentage) }),
       },
       create: { id: 'singleton' }
     });

@@ -123,9 +123,39 @@ export const getStaffSalaryHistory = async (req: Request, res: Response): Promis
 // DELETE salary record
 export const deleteSalaryRecord = async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.salaryRecord.delete({ where: { id: req.params.id as string } });
-    res.json({ message: 'Deleted' });
+    const { id } = req.params;
+
+    // 1. Get record details to find associated expense
+    const record = await prisma.salaryRecord.findUnique({
+      where: { id: id as string },
+      include: { staffProfile: { include: { user: true } } }
+    });
+
+    if (!record) {
+      res.status(404).json({ message: 'Salary record not found' });
+      return;
+    }
+
+    // 2. Transaction to delete both
+    await prisma.$transaction(async (tx) => {
+      await tx.salaryRecord.delete({ where: { id: id as string } });
+
+      const relatedExpense = await tx.expense.findFirst({
+        where: {
+          amount: record.netSalary,
+          payeeName: record.staffProfile.user.name,
+          purpose: 'STAFF_PAYROLL'
+        }
+      });
+
+      if (relatedExpense) {
+        await tx.expense.delete({ where: { id: relatedExpense.id } });
+      }
+    });
+
+    res.json({ message: 'Salary record and ledger entry deleted' });
   } catch (error) {
+    console.error('Delete Salary Record Error:', error);
     res.status(500).json({ message: 'Server error', error });
   }
 };

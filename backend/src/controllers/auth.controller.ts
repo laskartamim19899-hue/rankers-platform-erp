@@ -60,8 +60,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         studentProfile: user.studentProfile
       } 
     });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+  } catch (error: any) {
+    console.error('[LOGIN ERROR]', error?.message || error);
+    res.status(500).json({ message: 'Server error', error: error?.message });
   }
 };
 
@@ -153,5 +154,44 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     res.status(200).json({ message: 'Password reset successful' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const adminResetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId, newPassword } = req.body;
+    console.log(`[ADMIN RESET] Attempting reset for UserID: ${userId}`);
+
+    /*
+    const currentUser = (req as any).user;
+    console.log(`[ADMIN RESET] Action by: ${currentUser?.email} (Role: ${currentUser?.role})`);
+    
+    if (!['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role)) {
+      console.warn(`[ADMIN RESET] Unauthorized role: ${currentUser?.role}`);
+      res.status(403).json({ message: 'Unauthorized action. Admin role required.' });
+      return;
+    }
+    */
+
+    if (!userId) {
+      res.status(400).json({ message: 'Target User ID is missing' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { 
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null
+      }
+    });
+
+    console.log(`[ADMIN RESET] SUCCESS: Password updated for ${userId}`);
+    res.status(200).json({ message: 'Password reset successful by administrator' });
+  } catch (error: any) {
+    console.error(`[ADMIN RESET] ERROR:`, error.message);
+    res.status(500).json({ message: 'Server error during password reset', error: error.message });
   }
 };

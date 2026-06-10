@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { studentApi } from "@/lib/api";
 import Link from "next/link";
 
@@ -25,14 +26,14 @@ export default function AdmissionsApproval() {
     }
   };
 
+  const router = useRouter();
   const handleApprove = async (id: string) => {
     if (!confirm("Are you sure you want to approve this student? This will generate their unique Registration Number.")) return;
     
     setIsApproving(id);
     try {
       await studentApi.approve(id);
-      alert("Student approved successfully!");
-      fetchPending();
+      router.push(`/admin/students/approval-success/${id}`);
     } catch (err) {
       alert("Failed to approve student.");
     } finally {

@@ -1,5 +1,7 @@
-import express, { Application, Request, Response } from 'express';
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.routes';
 import studentRoutes from './routes/student.routes';
 import financeRoutes from './routes/finance.routes';
@@ -19,20 +21,24 @@ import meritRoutes from './routes/merit.routes';
 import salaryRoutes from './routes/salary.routes';
 import guestRoutes from './routes/guest.routes';
 import dataRoutes from './routes/data.routes';
+import transportRoutes from './routes/transport.routes';
+import certificateRoutes from './routes/certificate.routes';
+import otherIncomeRoutes from './routes/otherIncome.routes';
+import cbtRoutes from './routes/cbt.routes';
 
 const app: Application = express();
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static('uploads'));
+app.use(cors({ origin: '*' }));
 
-// Request Logger
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
+// Security Middleware
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: false,
+}));
+app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -54,10 +60,27 @@ app.use('/api/merit', meritRoutes);
 app.use('/api/salary', salaryRoutes);
 app.use('/api/guest', guestRoutes);
 app.use('/api/data', dataRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/other-income', otherIncomeRoutes);
+app.use('/api/cbt', cbtRoutes);
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
+});
+
+// Global Error Handler
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled Error:', err);
+  const status = err.status || 500;
+  const message = err.message || 'Internal Server Error';
+  
+  res.status(status).json({
+    success: false,
+    message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+  });
 });
 
 export default app;

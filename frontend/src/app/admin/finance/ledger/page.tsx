@@ -34,7 +34,7 @@ export default function StudentLedger() {
   const fmtTime = (d: string) => new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
   const paymentModeIcon: Record<string, string> = {
-    CASH: "payments", UPI: "qr_code_scanner", ONLINE: "account_balance", CHEQUE: "receipt_long"
+    CASH: "payments", UPI: "qr_code_scanner", ONLINE: "account_balance", CHEQUE: "receipt_long", MERCY: "volunteer_activism"
   };
 
   return (
@@ -240,7 +240,7 @@ export default function StudentLedger() {
                       <table className="w-full text-left">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-100">
-                            {["Course", "Due Date", "Base Amount", "Late Fine", "Total", "Paid", "Remaining", "Status"].map(h => (
+                            {["Course", "Due Date", "Amount", "Paid", "Remaining", "Status", "Action"].map(h => (
                               <th key={h} className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
@@ -250,8 +250,6 @@ export default function StudentLedger() {
                             <tr key={f.id} className="hover:bg-slate-50 transition-colors">
                               <td className="px-4 py-4 text-xs font-bold text-slate-800">{f.course.name}</td>
                               <td className="px-4 py-4 text-xs text-slate-500">{fmtDate(f.dueDate)}</td>
-                              <td className="px-4 py-4 text-xs font-black text-slate-800">₹{f.amount.toLocaleString()}</td>
-                              <td className="px-4 py-4 text-xs font-bold text-orange-600">{f.lateFee > 0 ? `₹${f.lateFee}` : "—"}</td>
                               <td className="px-4 py-4 text-xs font-black text-slate-900">₹{(f.amount + (f.lateFee || 0)).toLocaleString()}</td>
                               <td className="px-4 py-4 text-xs font-black text-emerald-600">₹{f.totalPaid.toLocaleString()}</td>
                               <td className="px-4 py-4 text-xs font-black text-red-600">₹{f.remaining.toLocaleString()}</td>
@@ -259,6 +257,17 @@ export default function StudentLedger() {
                                 <span className={`px-2 py-1 rounded text-[9px] font-black uppercase ${f.status === "PAID" ? "bg-emerald-100 text-emerald-700" : f.status === "PARTIAL" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>
                                   {f.status}
                                 </span>
+                              </td>
+                              <td className="px-4 py-4">
+                                {f.status !== "PAID" && (
+                                  <Link 
+                                    href={`/admin/finance?regNo=${selected.student.regNo}&feeId=${f.id}`}
+                                    className="bg-primary text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-1 w-fit"
+                                  >
+                                    <span className="material-symbols-outlined text-[12px]">payments</span>
+                                    Pay
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -291,7 +300,7 @@ export default function StudentLedger() {
                       <table className="w-full text-left">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-100">
-                            {["Month", "Due Date", "Amount", "Late Fine", "Total", "Paid", "Remaining", "Status"].map(h => (
+                            {["Month", "Due Date", "Amount", "Paid", "Remaining", "Status", "Action"].map(h => (
                               <th key={h} className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
@@ -303,8 +312,6 @@ export default function StudentLedger() {
                                 <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[9px] font-black rounded uppercase">{f.month}</span>
                               </td>
                               <td className="px-4 py-3 text-xs text-slate-500">{fmtDate(f.dueDate)}</td>
-                              <td className="px-4 py-3 text-xs font-black text-slate-800">₹{f.amount.toLocaleString()}</td>
-                              <td className="px-4 py-3 text-xs font-bold text-orange-600">{f.lateFee > 0 ? `₹${f.lateFee}` : "—"}</td>
                               <td className="px-4 py-3 text-xs font-black text-slate-900">₹{(f.amount + (f.lateFee || 0)).toLocaleString()}</td>
                               <td className="px-4 py-3 text-xs font-black text-emerald-600">₹{f.totalPaid.toLocaleString()}</td>
                               <td className="px-4 py-3 text-xs font-black text-red-600">₹{f.remaining.toLocaleString()}</td>
@@ -312,6 +319,17 @@ export default function StudentLedger() {
                                 <span className={`px-2 py-1 rounded text-[9px] font-black uppercase ${f.status === "PAID" ? "bg-emerald-100 text-emerald-700" : f.status === "PARTIAL" ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"}`}>
                                   {f.status}
                                 </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {f.status !== "PAID" && (
+                                  <Link 
+                                    href={`/admin/finance?regNo=${selected.student.regNo}&feeId=${f.id}`}
+                                    className="bg-primary text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-1 w-fit"
+                                  >
+                                    <span className="material-symbols-outlined text-[12px]">payments</span>
+                                    Pay
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -351,24 +369,40 @@ export default function StudentLedger() {
                 ) : (
                   <div className="divide-y divide-slate-50">
                     {selected.transactions.map((txn: any, idx: number) => (
-                      <div key={txn.id} className="px-6 py-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div key={txn.id} className={`px-6 py-5 flex items-center justify-between hover:bg-slate-50 transition-colors ${txn.paymentMode === 'MERCY' ? 'bg-purple-50/50' : ''}`}>
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                            txn.paymentMode === 'MERCY'
+                              ? 'bg-purple-100 text-purple-600'
+                              : 'bg-emerald-50 text-emerald-600'
+                          }`}>
                             <span className="material-symbols-outlined text-sm">
                               {paymentModeIcon[txn.paymentMode] || "payments"}
                             </span>
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-black text-slate-900">₹{txn.amount.toLocaleString()}</p>
+                              <p className={`text-sm font-black ${txn.paymentMode === 'MERCY' ? 'text-purple-700' : 'text-slate-900'}`}>
+                                {txn.paymentMode === 'MERCY' ? '⚡' : ''} ₹{txn.amount.toLocaleString()}
+                              </p>
                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${txn.feeType === "HOSTEL" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
                                 {txn.feeType} {txn.feeMonth ? `• ${txn.feeMonth}` : ""}
                               </span>
-                              <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{txn.paymentMode}</span>
+                              {txn.paymentMode === 'MERCY' ? (
+                                <span className="text-[9px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">MERCY WAIVER</span>
+                              ) : (
+                                <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{txn.paymentMode}</span>
+                              )}
                             </div>
-                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                              TXN: <span className="text-primary font-black">{txn.transactionId || "—"}</span>
-                            </p>
+                            {txn.paymentMode === 'MERCY' && txn.transactionId ? (
+                              <p className="text-[9px] text-purple-500 font-bold mt-0.5 italic">
+                                {txn.transactionId.replace('MERCY-WAIVER: ', 'Reason: ')}
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                TXN: <span className="text-primary font-black">{txn.transactionId || "—"}</span>
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">

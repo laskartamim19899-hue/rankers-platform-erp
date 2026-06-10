@@ -8,19 +8,40 @@ export default function AdminReports() {
   const [finance, setFinance] = useState<any>(null);
   const [academic, setAcademic] = useState<any>(null);
   const [payroll, setPayroll] = useState<any[]>([]);
+  const [expenseAnalysis, setExpenseAnalysis] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const formatCategory = (cat: string) => {
+    const map: Record<string, string> = {
+      'STAFF_SALARY': 'Staff Salary',
+      'TEACHER_SALARY': 'Teacher Salary',
+      'FOOD_MATERIAL': 'Food Material',
+      'KITCHEN_ESSENTIAL': 'Kitchen Essential',
+      'OFFICE_ESSENTIAL': 'Office Essential',
+      'HOSTEL_ESSENTIAL': 'Hostel Essential',
+      'MAINTENANCE': 'Maintenance',
+      'OTHERS': 'Others',
+      'OPERATIONAL': 'Operational',
+      'SALARY': 'Staff Salary',
+      'MARKETING': 'Marketing',
+      'OTHER': 'Other'
+    };
+    return map[cat] || cat;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [finRes, acadRes, payrollRes] = await Promise.all([
+        const [finRes, acadRes, payrollRes, expenseRes] = await Promise.all([
           reportApi.getFinanceSummary(),
           reportApi.getAcademicAnalytics(),
-          reportApi.getPayrollReport()
+          reportApi.getPayrollReport(),
+          reportApi.getExpenseAnalysis()
         ]);
         setFinance(finRes.data);
         setAcademic(acadRes.data);
         setPayroll(payrollRes.data);
+        setExpenseAnalysis(expenseRes.data);
       } catch (err) {
         console.error("Failed to fetch reports", err);
       } finally {
@@ -43,13 +64,22 @@ export default function AdminReports() {
           </Link>
           <h1 className="text-xl font-black text-primary tracking-tight">Institutional Intelligence</h1>
         </div>
-        <button 
-          onClick={handleDownload}
-          className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-primary/20"
-        >
-          <span className="material-symbols-outlined text-sm">download</span>
-          Export Full Report
-        </button>
+        <div className="flex gap-3">
+          <Link 
+            href="/admin/reports/collections"
+            className="bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+          >
+            <span className="material-symbols-outlined text-sm">payments</span>
+            Collection Audit Hub
+          </Link>
+          <button 
+            onClick={handleDownload}
+            className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-primary/20"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            Export Full Report
+          </button>
+        </div>
       </header>
 
       {/* Print-only Header */}
@@ -69,9 +99,14 @@ export default function AdminReports() {
               <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mb-1">LIVE</span>
             </div>
           </div>
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm print:border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Collection</p>
-            <p className="text-4xl font-black text-emerald-600">₹{finance?.collected?.toLocaleString() || 0}</p>
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm group hover:border-emerald-500 transition-all cursor-pointer print:border-slate-100">
+            <Link href="/admin/reports/collections">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Collection</p>
+              <div className="flex justify-between items-end">
+                <p className="text-4xl font-black text-emerald-600">₹{finance?.collected?.toLocaleString() || 0}</p>
+                <span className="material-symbols-outlined text-emerald-600 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </div>
+            </Link>
           </div>
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm group hover:border-red-500 transition-all cursor-pointer">
             <Link href="/admin/reports/defaulters">
@@ -114,6 +149,72 @@ export default function AdminReports() {
                   <p className="text-sm text-slate-400 font-bold uppercase">No Recent Transactions</p>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Institutional Expenditure Analysis */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden print:shadow-none lg:col-span-2">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Expenditure Analytics</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Cross-Category Financial Outflow</p>
+              </div>
+              <div className="text-right">
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Institutional Spend</p>
+                 <p className="text-2xl font-black text-red-600">₹{expenseAnalysis?.totalAmount?.toLocaleString() || 0}</p>
+              </div>
+            </div>
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-12">
+              {/* Category Breakdown */}
+              <div className="space-y-6">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Spending by Category</h3>
+                <div className="space-y-5">
+                  {expenseAnalysis?.categoryBreakdown?.length > 0 ? expenseAnalysis.categoryBreakdown.map((item: any) => (
+                    <div key={item.category} className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-sm font-black text-slate-700">{formatCategory(item.category)}</span>
+                        <span className="text-xs font-bold text-slate-400">₹{item.amount.toLocaleString()} ({item.percentage.toFixed(1)}%)</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-primary rounded-full transition-all duration-1000"
+                          style={{ width: `${item.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  )) : (
+                    <p className="text-xs text-slate-400 font-bold uppercase py-10 text-center">No category data available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Fund Source & Trend Insights */}
+              <div className="space-y-8">
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Fund Source Distribution</h3>
+                  <div className="flex gap-4">
+                    <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">General Fund</p>
+                      <p className="text-lg font-black text-slate-900">₹{expenseAnalysis?.fundSourceBreakdown?.GENERAL?.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200">
+                      <p className="text-[10px] font-black text-purple-400 uppercase mb-1">Reserve Fund</p>
+                      <p className="text-lg font-black text-purple-600">₹{expenseAnalysis?.fundSourceBreakdown?.RESERVE?.toLocaleString() || 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
+                  <h3 className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">Efficiency Insight</h3>
+                  <p className="text-sm text-emerald-800 font-medium leading-relaxed">
+                    {expenseAnalysis?.topCategory ? (
+                      <>Institutional spending is currently highest in <span className="font-black underline">{formatCategory(expenseAnalysis.topCategory.category)}</span>, accounting for <span className="font-black">{expenseAnalysis.topCategory.percentage.toFixed(1)}%</span> of total expenses.</>
+                    ) : (
+                      "Insufficient data to generate spending insights. Record more expenses to see analysis."
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

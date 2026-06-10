@@ -60,10 +60,17 @@ export default function StudentDashboard() {
   };
 
   const student = studentData || {
-    user: { name: "Arjun Sharma" },
-    regNo: "RP-2024-8842",
-    courses: [{ course: { name: "Grade 12 - Medical" } }],
+    user: { name: "Student" },
+    regNo: "N/A",
+    courses: [],
   };
+
+  const totalAllocated = fees.reduce((sum, f) => sum + f.amount + (f.lateFee || 0), 0);
+  const totalPaid = fees.reduce((sum, f) => sum + (f.payments?.reduce((s: number, p: any) => s + p.amount, 0) || 0), 0);
+  const totalRemaining = Math.max(0, totalAllocated - totalPaid);
+  const paidPercentage = totalAllocated > 0 ? (totalPaid / totalAllocated) * 100 : 0;
+
+  const nextFee = fees.find(f => f.status !== 'PAID');
 
   return (
     <div className="bg-background text-on-surface font-body-md min-h-screen flex flex-col pb-20 md:pb-0">
@@ -115,7 +122,7 @@ export default function StudentDashboard() {
                 {student.courses?.[0]?.course?.name || "No Active Course"}
               </span>
               <span className="px-3 py-1 bg-secondary-container text-on-secondary-container text-[12px] font-semibold uppercase tracking-wider rounded-full">
-                Scholarship Tier A
+                {student.scholarshipTier || "General Tier"}
               </span>
             </div>
           </div>
@@ -129,38 +136,40 @@ export default function StudentDashboard() {
 
         {/* Finance Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* Academic Fee Card */}
+          {/* Pending Fee Card */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-primary transition-all duration-300">
             <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-slate-50 text-primary rounded-lg group-hover:bg-primary group-hover:text-white transition-colors">
                 <span className="material-symbols-outlined">payments</span>
               </div>
-              <span className="text-secondary font-bold text-xs flex items-center bg-secondary/10 px-2 py-0.5 rounded-full">
-                Next Due: {fees.length > 0 ? new Date(fees[0].dueDate).toLocaleDateString() : "N/A"}
-              </span>
+              {nextFee && (
+                <span className="text-secondary font-bold text-xs flex items-center bg-secondary/10 px-2 py-0.5 rounded-full">
+                  Due: {new Date(nextFee.dueDate).toLocaleDateString()}
+                </span>
+              )}
             </div>
             <div>
               <p className="text-slate-500 font-semibold text-[11px] uppercase tracking-wider mb-1">
-                Pending Academic Fees
+                Outstanding Balance
               </p>
               <h2 className="text-2xl font-bold text-primary">
-                ₹{fees.reduce((acc, f) => f.status !== 'PAID' ? acc + f.amount : acc, 0).toLocaleString()}
+                ₹{totalRemaining.toLocaleString()}
               </h2>
             </div>
           </div>
           
-          {/* Scholarship Card */}
+          {/* Paid Fee Card */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between group hover:border-secondary transition-all duration-300">
             <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-slate-50 text-secondary rounded-lg group-hover:bg-secondary group-hover:text-white transition-colors">
-                <span className="material-symbols-outlined">auto_awesome</span>
+                <span className="material-symbols-outlined">check_circle</span>
               </div>
             </div>
             <div>
               <p className="text-slate-500 font-semibold text-[11px] uppercase tracking-wider mb-1">
-                Scholarship Savings
+                Total Fees Paid
               </p>
-              <h2 className="text-2xl font-bold text-secondary">₹45,000</h2>
+              <h2 className="text-2xl font-bold text-secondary">₹{totalPaid.toLocaleString()}</h2>
             </div>
           </div>
         </div>
@@ -191,7 +200,7 @@ export default function StudentDashboard() {
               <div className="mt-4">
                 <p className="text-xl font-bold">
                   {academic?.lastTest?.marksObtained || 0}
-                  <span className="text-sm text-slate-400">/{academic?.lastTest?.test?.maxMarks || 0}</span>
+                  <span className="text-sm text-slate-400">/{academic?.lastTest?.test?.maxMarks || 100}</span>
                 </p>
                 <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
                   <div className="bg-secondary h-full" style={{ width: `${(academic?.lastTest?.marksObtained / academic?.lastTest?.test?.maxMarks) * 100 || 0}%` }}></div>
@@ -224,11 +233,11 @@ export default function StudentDashboard() {
                 <div>
                   <h3 className="text-xl font-bold text-primary mb-1">Performance Insight</h3>
                   <p className="text-sm text-slate-600 max-w-md">
-                    Your strong suit is Biological Sciences. Focus on Organic Chemistry mechanisms this week.
+                    Keep track of your academic performance and attendance trends here.
                   </p>
                 </div>
                 <button className="bg-primary text-white px-6 py-2.5 rounded-full text-[12px] font-semibold uppercase tracking-wider hover:bg-primary-container transition-all active:scale-95 shrink-0 cursor-pointer">
-                  VIEW ANALYTICS report
+                  VIEW ANALYTICS
                 </button>
               </div>
             </div>
@@ -243,20 +252,24 @@ export default function StudentDashboard() {
               </h3>
               <div className="space-y-4">
                 <div className="flex justify-between text-[12px] font-semibold uppercase tracking-wider">
-                  <span className="text-slate-500">Fees Paid</span>
-                  <span className="text-primary font-bold">₹1,20,000 / ₹1,80,000</span>
+                  <span className="text-slate-500">Progress</span>
+                  <span className="text-primary font-bold">₹{totalPaid.toLocaleString()} / ₹{totalAllocated.toLocaleString()}</span>
                 </div>
                 <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
-                  <div className="bg-primary h-full rounded-full" style={{ width: "66.6%" }}></div>
+                  <div className="bg-primary h-full rounded-full" style={{ width: `${paidPercentage}%` }}></div>
                 </div>
-                <div className="p-4 bg-white/60 rounded-lg border border-white/80">
-                  <p className="text-[12px] text-slate-600 mb-1">Next Installment due by 15th Nov</p>
-                  <p className="text-xl font-bold">₹60,000</p>
-                </div>
-                <button className="w-full bg-primary text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-primary-container transition-all active:scale-95 shadow-lg shadow-primary/20 cursor-pointer">
-                  Pay Now
+                {nextFee && (
+                  <div className="p-4 bg-white/60 rounded-lg border border-white/80">
+                    <p className="text-[12px] text-slate-600 mb-1">
+                      {nextFee.type} {nextFee.month ? `(${nextFee.month})` : ""} due by {new Date(nextFee.dueDate).toLocaleDateString()}
+                    </p>
+                    <p className="text-xl font-bold">₹{(nextFee.amount + (nextFee.lateFee || 0)).toLocaleString()}</p>
+                  </div>
+                )}
+                <Link href="/profile" className="w-full bg-primary text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-primary-container transition-all active:scale-95 shadow-lg shadow-primary/20 cursor-pointer">
+                  View Full Ledger
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -297,16 +310,16 @@ export default function StudentDashboard() {
           <div className="md:col-span-12">
             <h3 className="text-xl font-bold text-primary mb-4">Quick Links</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <a
+              <Link
                 className="flex items-center gap-4 p-4 bg-white border border-outline-variant rounded-xl hover:border-surface-tint hover:bg-surface-container-low transition-all group"
-                href="#"
+                href="/results"
               >
                 <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
                   <span className="material-symbols-outlined">description</span>
                 </div>
                 <span className="font-semibold text-on-surface">View Result</span>
-              </a>
-              <a
+              </Link>
+              <Link
                 className="flex items-center gap-4 p-4 bg-white border border-outline-variant rounded-xl hover:border-surface-tint hover:bg-surface-container-low transition-all group"
                 href="#"
               >
@@ -314,8 +327,8 @@ export default function StudentDashboard() {
                   <span className="material-symbols-outlined">download</span>
                 </div>
                 <span className="font-semibold text-on-surface">Download Notes</span>
-              </a>
-              <a
+              </Link>
+              <Link
                 className="flex items-center gap-4 p-4 bg-white border border-outline-variant rounded-xl hover:border-surface-tint hover:bg-surface-container-low transition-all group"
                 href="#"
               >
@@ -323,16 +336,25 @@ export default function StudentDashboard() {
                   <span className="material-symbols-outlined">apartment</span>
                 </div>
                 <span className="font-semibold text-on-surface">Hostel Status</span>
-              </a>
-              <a
+              </Link>
+              <Link
                 className="flex items-center gap-4 p-4 bg-white border border-outline-variant rounded-xl hover:border-surface-tint hover:bg-surface-container-low transition-all group"
-                href="#"
+                href="/support"
               >
                 <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
                   <span className="material-symbols-outlined">support_agent</span>
                 </div>
                 <span className="font-semibold text-on-surface">Help Desk</span>
-              </a>
+              </Link>
+              <Link
+                className="flex items-center gap-4 p-4 bg-white border border-outline-variant rounded-xl hover:border-surface-tint hover:bg-surface-container-low transition-all group"
+                href="/student/cbt"
+              >
+                <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <span className="material-symbols-outlined">computer</span>
+                </div>
+                <span className="font-semibold text-on-surface">CBT Exams</span>
+              </Link>
             </div>
           </div>
         </div>
@@ -363,28 +385,32 @@ export default function StudentDashboard() {
 
       {/* BottomNavBar (Mobile Only) */}
       <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 bg-white/80 backdrop-blur-md border-t border-slate-200">
-        <button className="flex flex-col items-center justify-center bg-surface-variant text-on-surface-variant rounded-xl px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform">
+        <Link href="/student/dashboard" className="flex flex-col items-center justify-center bg-surface-variant text-on-surface-variant rounded-xl px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform">
           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
             dashboard
           </span>
           <span className="font-inter text-[10px] font-medium">Home</span>
-        </button>
-        <button className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
+        </Link>
+        <Link href="/student/cbt" className="flex flex-col items-center justify-center text-indigo-600 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform font-bold">
+          <span className="material-symbols-outlined">computer</span>
+          <span className="font-inter text-[10px] font-medium">CBT</span>
+        </Link>
+        <Link href="/results" className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
           <span className="material-symbols-outlined">school</span>
           <span className="font-inter text-[10px] font-medium">Academics</span>
-        </button>
-        <button className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
+        </Link>
+        <Link href="/profile" className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
           <span className="material-symbols-outlined">payments</span>
           <span className="font-inter text-[10px] font-medium">Finance</span>
-        </button>
-        <button className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
+        </Link>
+        <Link href="/support" className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
           <span className="material-symbols-outlined">forum</span>
           <span className="font-inter text-[10px] font-medium">Connect</span>
-        </button>
-        <button className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
+        </Link>
+        <Link href="/profile" className="flex flex-col items-center justify-center text-slate-500 px-3 py-1 tap-highlight-transparent active:scale-90 transition-transform hover:text-secondary">
           <span className="material-symbols-outlined">account_circle</span>
           <span className="font-inter text-[10px] font-medium">Profile</span>
-        </button>
+        </Link>
       </nav>
     </div>
   );

@@ -110,29 +110,29 @@ export default function WhatsAppNotificationEngine() {
 
     switch (template) {
       case "FEE_REMINDER": {
-        const amt = customFeeAmount || "[Amount]";
+        const amt = customFeeAmount || "[Amount / পরিমাণ]";
         const feeLabel = selectedFee
-          ? `${selectedFee.type === "HOSTEL" ? "Hostel" : "Academic"} Fee${selectedFee.month ? ` (${selectedFee.month})` : ""} — Due ${new Date(selectedFee.dueDate).toLocaleDateString("en-IN")}`
-          : "pending fee";
-        const lateLine = selectedFee?.lateFee > 0 ? `\n⚠️ A late fine of ₹${selectedFee.lateFee} has been added.` : "";
-        return `Dear ${parentName},\n\nThis is a gentle reminder from *Rankers' Platform* regarding the outstanding *${feeLabel}* of *₹${amt}* for your ward, *${studentName}* (${selectedStudent.regNo}).${lateLine}\n\nKindly settle the dues at the earliest to avoid any inconvenience.\n\n📞 Contact: Admin Office\n🏫 Rankers' Platform\n\nThank you,\n*Rankers' Platform Admin*`;
+          ? `${selectedFee.type === "HOSTEL" ? "Hostel / হোস্টেল" : "Academic / একাডেমিক"} Fee / ফি${selectedFee.month ? ` (${selectedFee.month})` : ""} — Due / বকেয়া তারিখ ${new Date(selectedFee.dueDate).toLocaleDateString("en-IN")}`
+          : "pending fee / বকেয়া ফি";
+        const lateLine = selectedFee?.lateFee > 0 ? `\n\u26A0\uFE0F A late fine of ₹${selectedFee.lateFee} has been added. / বিলম্ব জরিমানা হিসেবে ₹${selectedFee.lateFee} যোগ করা হয়েছে।` : "";
+        return `Dear / প্রিয় ${parentName},\n\nThis is a gentle reminder from *Rankers' Platform* regarding the outstanding *${feeLabel}* of *₹${amt}* for your ward, *${studentName}* (${selectedStudent.regNo}).\n*Rankers' Platform* থেকে জানানো হচ্ছে যে, আপনার সন্তান *${studentName}* (${selectedStudent.regNo})-এর *${feeLabel}* বাবদ *₹${amt}* বকেয়া রয়েছে।${lateLine}\n\nKindly settle the dues at the earliest to avoid any inconvenience.\nঅনুগ্রহ করে যত দ্রুত সম্ভব বকেয়া পরিশোধ করুন।\n\n\uD83D\uDCDE Contact / যোগাযোগ: Admin Office / অ্যাডমিন অফিস\n\uD83C\uDFEB Rankers' Platform\n\nThank you / ধন্যবাদ,\n*Rankers' Platform Admin*`;
       }
       case "ABSENT_ALERT":
-        return `Dear ${parentName},\n\nThis is to inform you that your ward, *${studentName}* (${selectedStudent.regNo}), was *absent* from classes today (${new Date().toLocaleDateString("en-IN")}).\n\nPlease ensure regular attendance for better academic performance. If this was due to an emergency, kindly submit a leave application.\n\nRegards,\n*Rankers' Platform Academic Team*`;
+        return `Dear / প্রিয় ${parentName},\n\nThis is to inform you that your ward, *${studentName}* (${selectedStudent.regNo}), was *absent* from classes today (${new Date().toLocaleDateString("en-IN")}).\nআপনাকে জানানো হচ্ছে যে, আপনার সন্তান *${studentName}* (${selectedStudent.regNo}) আজকের (${new Date().toLocaleDateString("en-IN")}) ক্লাসে *অনুপস্থিত* ছিল।\n\nPlease ensure regular attendance for better academic performance. If this was due to an emergency, kindly submit a leave application.\nভালো ফলাফলের জন্য নিয়মিত উপস্থিতি নিশ্চিত করুন। জরুরি কারণে অনুপস্থিত থাকলে ছুটির আবেদন জমা দিন।\n\nRegards / ধন্যবাদ,\n*Rankers' Platform Academic Team*`;
       case "RESULT_ALERT": {
-        const test = customTestName || "[Test Name]";
-        const marks = customMarks || "[Marks]";
+        const test = customTestName || "[Test Name / পরীক্ষার নাম]";
+        const marks = customMarks || "[Marks / নম্বর]";
         const perf = selectedResult
           ? Number(selectedResult.marksObtained) / Number(selectedResult.test?.totalMarks || 1) >= 0.75
-            ? "Excellent performance! 🌟 Keep it up!"
+            ? "Excellent performance! \uD83C\uDF1F Keep it up! / চমৎকার ফলাফল! এভাবেই এগিয়ে যাও!"
             : Number(selectedResult.marksObtained) / Number(selectedResult.test?.totalMarks || 1) >= 0.5
-              ? "Good effort! Encourage them to aim higher. 📚"
-              : "We encourage more focused preparation for upcoming tests. 💪"
+              ? "Good effort! Encourage them to aim higher. \uD83D\uDCDA / ভালো চেষ্টা! তাকে আরও উপরে লক্ষ্য রাখতে উৎসাহিত করুন।"
+              : "We encourage more focused preparation for upcoming tests. \uD83D\uDCAA / আসন্ন পরীক্ষার জন্য আরও মনোযোগী প্রস্তুতির পরামর্শ দেওয়া হচ্ছে।"
           : "";
-        return `Dear ${parentName},\n\nWe are sharing the results of *${studentName}* (${selectedStudent.regNo}) for the recent *${test}* examination.\n\n📊 *Score: ${marks}*\n${perf}\n\nFor detailed performance analysis, please visit the admin portal or contact us.\n\nRegards,\n*Rankers' Platform Academic Team*`;
+        return `Dear / প্রিয় ${parentName},\n\nWe are sharing the results of *${studentName}* (${selectedStudent.regNo}) for the recent *${test}* examination.\n*${studentName}* (${selectedStudent.regNo})-এর সাম্প্রতিক *${test}* পরীক্ষার ফলাফল শেয়ার করা হচ্ছে।\n\n\uD83D\uDCCA *Score / প্রাপ্ত নম্বর: ${marks}*\n${perf}\n\nFor detailed performance analysis, please visit the admin portal or contact us.\nবিস্তারিত বিশ্লেষণের জন্য অ্যাডমিন পোর্টাল পরিদর্শন করুন অথবা আমাদের সাথে যোগাযোগ করুন।\n\nRegards / ধন্যবাদ,\n*Rankers' Platform Academic Team*`;
       }
       case "CUSTOM":
-        return customMessage || `Dear ${parentName},\n\n[Type your custom message here]\n\nRegards,\nRankers' Platform`;
+        return customMessage || `Dear / প্রিয় ${parentName},\n\n[Type your custom message here / এখানে আপনার কাস্টম বার্তা লিখুন]\n\nRegards / ধন্যবাদ,\nRankers' Platform`;
       default:
         return "";
     }

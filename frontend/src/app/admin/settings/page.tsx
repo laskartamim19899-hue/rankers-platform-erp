@@ -86,6 +86,7 @@ export default function InstitutionSettings() {
         gstNumber: settings.gstNumber,
         tagline: settings.tagline,
         principalName: settings.principalName,
+        reserveFundPercentage: settings.reserveFundPercentage,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -320,8 +321,8 @@ export default function InstitutionSettings() {
 
                 {/* Automation Section */}
                 <div className="space-y-4">
-                  <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest border-b pb-2">Automation & Fees</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                  <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest border-b pb-2">Automation, Fees & Reserves</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Late Fee (₹/Day)</label>
                       <input type="number" value={settings?.lateFeePerDay || 0} onChange={(e) => setSettings({...settings, lateFeePerDay: e.target.value})} className="w-full h-12 px-4 rounded-xl border border-slate-200 font-bold outline-none focus:ring-2 focus:ring-primary" />
@@ -329,6 +330,10 @@ export default function InstitutionSettings() {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grace Period (Days)</label>
                       <input type="number" value={settings?.gracePeriodDays || 0} onChange={(e) => setSettings({...settings, gracePeriodDays: e.target.value})} className="w-full h-12 px-4 rounded-xl border border-slate-200 font-bold outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reserve Fund (%)</label>
+                      <input type="number" max="100" min="0" value={settings?.reserveFundPercentage || 60} onChange={(e) => setSettings({...settings, reserveFundPercentage: e.target.value})} className="w-full h-12 px-4 rounded-xl border border-slate-200 font-bold outline-none focus:ring-2 focus:ring-primary" />
                     </div>
                   </div>
                   <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 mt-4">

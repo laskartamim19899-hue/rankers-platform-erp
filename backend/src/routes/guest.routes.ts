@@ -22,6 +22,6 @@ router.delete('/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), deleteG
 router.post('/pay', authenticate, authorize(ROLES), disburseGuestPayment);
 router.get('/payment/:id', authenticate, authorize(ROLES), getGuestPayment);
 router.get('/history/:id', authenticate, authorize(ROLES), getGuestPaymentHistory);
-router.delete('/payment/:id', authenticate, authorize(['SUPER_ADMIN', 'ADMIN']), deleteGuestPayment);
+router.delete('/payment/:id', authenticate, authorize(ROLES), deleteGuestPayment);
 
 export default router;

@@ -19,6 +19,9 @@ export const getStudentFees = async (req: Request, res: Response): Promise<void>
     const gracePeriodDays = settings?.gracePeriodDays ?? 0;
     const lateFeeEnabled = settings?.lateFeeEnabled ?? true;
 
+    const student = await prisma.student.findUnique({ where: { id: studentId as string } });
+    const isInactive = student?.status === 'INACTIVE';
+
     // Auto-apply late fees based on institution settings
     const processedFees = await Promise.all(rawFees.map(async (fee) => {
       const today = new Date();
@@ -48,7 +51,8 @@ export const getStudentFees = async (req: Request, res: Response): Promise<void>
       return fee;
     }));
 
-    res.status(200).json(processedFees);
+    const finalFees = isInactive ? processedFees.filter(f => f.status === 'PAID') : processedFees;
+    res.status(200).json(finalFees);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
   }
@@ -169,10 +173,19 @@ export const getAllDues = async (req: Request, res: Response): Promise<void> => 
     const rawDues = await prisma.fee.findMany({
       where: {
         status: { in: ['PENDING', 'PARTIAL'] },
-        dueDate: { lte: new Date() }
+        dueDate: { lte: new Date() },
+        student: { status: { not: 'INACTIVE' } }
       },
       include: {
-        student: { include: { user: { select: { name: true } } } },
+        student: {
+          include: {
+            user: { select: { name: true } },
+            fees: {
+              where: { status: { in: ['PENDING', 'PARTIAL'] } },
+              include: { payments: { select: { amount: true } } }
+            }
+          }
+        },
         course: { select: { name: true } },
         payments: true
       }
@@ -205,6 +218,83 @@ export const getAllDues = async (req: Request, res: Response): Promise<void> => 
           where: { id: fee.id },
           data: { lateFee: calculatedLateFee },
           include: {
+            student: {
+              include: {
+                user: { select: { name: true } },
+                fees: {
+                  where: { status: { in: ['PENDING', 'PARTIAL'] } },
+                  include: { payments: { select: { amount: true } } }
+                }
+              }
+            },
+            course: { select: { name: true } },
+            payments: true
+          }
+        });
+      }
+      return fee;
+    }));
+
+    const processedDuesWithTotal = processedDues.map(fee => {
+      // Calculate student's total outstanding dues
+      const studentTotalRemaining = (fee.student.fees || []).reduce((sum, f) => {
+        const gross = f.amount + (f.lateFee || 0);
+        const paid = f.payments.reduce((s, p) => s + p.amount, 0);
+        return sum + Math.max(0, gross - paid);
+      }, 0);
+
+      const { fees, ...studentWithoutFees } = fee.student;
+      return {
+        ...fee,
+        student: studentWithoutFees,
+        studentTotalRemaining
+      };
+    });
+
+    res.status(200).json(processedDuesWithTotal);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+export const getAllPendingFees = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawFees = await prisma.fee.findMany({
+      where: {
+        status: { in: ['PENDING', 'PARTIAL'] },
+        student: { status: { not: 'INACTIVE' } }
+      },
+      include: {
+        student: { include: { user: { select: { name: true } } } },
+        course: { select: { name: true } },
+        payments: true
+      }
+    });
+
+    const settings = await prisma.institutionSettings.findUnique({ where: { id: 'singleton' } });
+    const lateFeePerDay = settings?.lateFeePerDay ?? 10;
+    const gracePeriodDays = settings?.gracePeriodDays ?? 0;
+    const lateFeeEnabled = settings?.lateFeeEnabled ?? true;
+
+    const processedFees = await Promise.all(rawFees.map(async (fee) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(fee.dueDate);
+      due.setHours(0, 0, 0, 0);
+      
+      let calculatedLateFee = 0;
+      if (lateFeeEnabled && today > due) {
+        const diffTime = today.getTime() - due.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const effectiveDays = Math.max(0, diffDays - gracePeriodDays);
+        calculatedLateFee = effectiveDays * lateFeePerDay;
+      }
+
+      if (fee.lateFee !== calculatedLateFee) {
+        return await prisma.fee.update({
+          where: { id: fee.id },
+          data: { lateFee: calculatedLateFee },
+          include: {
             student: { include: { user: { select: { name: true } } } },
             course: { select: { name: true } },
             payments: true
@@ -214,11 +304,12 @@ export const getAllDues = async (req: Request, res: Response): Promise<void> => 
       return fee;
     }));
 
-    res.status(200).json(processedDues);
+    res.status(200).json(processedFees);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error });
   }
 };
+
 export const getPayment = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -314,10 +405,14 @@ export const getStudentLedger = async (req: Request, res: Response): Promise<voi
     });
 
     const results = students.map(student => {
-      const fees = student.fees;
+      const isInactive = student.status === 'INACTIVE';
+      const fees = isInactive ? student.fees.filter(f => f.status === 'PAID') : student.fees;
 
       // Summary
-      const totalAllocated = fees.reduce((s, f) => s + f.amount + (f.lateFee || 0), 0);
+      const totalAllocated = fees.reduce((s, f) => {
+        const paidAmount = f.payments.reduce((ps, p) => ps + p.amount, 0);
+        return s + (isInactive ? paidAmount : (f.amount + (f.lateFee || 0)));
+      }, 0);
       const totalPaid = fees.reduce((s, f) =>
         s + f.payments.reduce((ps, p) => ps + p.amount, 0), 0);
       const totalRemaining = Math.max(0, totalAllocated - totalPaid);
@@ -325,15 +420,27 @@ export const getStudentLedger = async (req: Request, res: Response): Promise<voi
       // Academic fees (yearly)
       const academicFees = fees.filter(f => f.type === 'ACADEMIC').map(f => {
         const paid = f.payments.reduce((s, p) => s + p.amount, 0);
-        const gross = f.amount + (f.lateFee || 0);
-        return { ...f, totalPaid: paid, remaining: Math.max(0, gross - paid) };
+        const gross = isInactive ? paid : (f.amount + (f.lateFee || 0));
+        return { 
+          ...f, 
+          amount: isInactive ? paid : f.amount,
+          lateFee: isInactive ? 0 : f.lateFee,
+          totalPaid: paid, 
+          remaining: Math.max(0, gross - paid) 
+        };
       });
 
       // Hostel fees (monthly)
       const hostelFees = fees.filter(f => f.type === 'HOSTEL').map(f => {
         const paid = f.payments.reduce((s, p) => s + p.amount, 0);
-        const gross = f.amount + (f.lateFee || 0);
-        return { ...f, totalPaid: paid, remaining: Math.max(0, gross - paid) };
+        const gross = isInactive ? paid : (f.amount + (f.lateFee || 0));
+        return { 
+          ...f, 
+          amount: isInactive ? paid : f.amount,
+          lateFee: isInactive ? 0 : f.lateFee,
+          totalPaid: paid, 
+          remaining: Math.max(0, gross - paid) 
+        };
       });
 
       // Flat chronological transaction list

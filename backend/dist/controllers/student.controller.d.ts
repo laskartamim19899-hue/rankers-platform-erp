@@ -1,0 +1,10 @@
+import { Request, Response } from 'express';
+export declare const createStudent: (req: Request, res: Response) => Promise<void>;
+export declare const getPendingStudents: (req: Request, res: Response) => Promise<void>;
+export declare const approveStudent: (req: Request, res: Response) => Promise<void>;
+export declare const getAllStudents: (req: Request, res: Response) => Promise<void>;
+export declare const getStudentById: (req: Request, res: Response) => Promise<void>;
+export declare const updateStudent: (req: Request, res: Response) => Promise<void>;
+export declare const searchStudentByRegNo: (req: Request, res: Response) => Promise<void>;
+export declare const deleteStudent: (req: Request, res: Response) => Promise<void>;
+export declare const enrollOrPromote: (req: Request, res: Response) => Promise<void>;

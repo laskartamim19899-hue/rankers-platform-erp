@@ -24,6 +24,7 @@ export const authApi = {
   changePassword: (data: any) => api.post('/auth/change-password', data),
   forgotPassword: (data: any) => api.post('/auth/forgot-password', data),
   resetPassword: (data: any) => api.post('/auth/reset-password', data),
+  adminResetPassword: (userId: string, newPassword: string) => api.post('/auth/admin-reset-password', { userId, newPassword }),
 };
 
 export const studentApi = {
@@ -42,6 +43,7 @@ export const financeApi = {
   getFees: (studentId: string) => api.get(`/finance/student/${studentId}`),
   payFee: (paymentData: any) => api.post('/finance/payment', paymentData),
   getAllDues: () => api.get('/finance/dues'),
+  getAllPending: () => api.get('/finance/all-pending'),
   allocate: (data: any) => api.post('/finance/allocate', data),
   getPayment: (id: string) => api.get(`/finance/payment/${id}`),
   deletePayment: (id: string) => api.delete(`/finance/payment/${id}`),
@@ -98,6 +100,8 @@ export const reportApi = {
   getFinanceSummary: () => api.get('/reports/finance'),
   getAcademicAnalytics: () => api.get('/reports/academic'),
   getPayrollReport: () => api.get('/reports/payroll'),
+  getExpenseAnalysis: () => api.get('/reports/expenses'),
+  getCollectionReport: (params?: any) => api.get('/reports/collections', { params }),
 };
 
 export const expenseApi = {
@@ -105,6 +109,9 @@ export const expenseApi = {
   getById: (id: string) => api.get(`/expenses/${id}`),
   create: (data: any) => api.post('/expenses', data),
   delete: (id: string) => api.delete(`/expenses/${id}`),
+  getAllCategories: () => api.get('/expenses/categories/all'),
+  addCategory: (name: string) => api.post('/expenses/categories/add', { name }),
+  deleteCategory: (id: string) => api.delete(`/expenses/categories/${id}`),
 };
 
 export const transactionApi = {
@@ -176,6 +183,31 @@ export const dataApi = {
   export: () => api.get('/data/export'),
   reset: (confirmPhrase: string) => api.post('/data/reset', { confirmPhrase }),
   import: (payload: any) => api.post('/data/import', payload),
+};
+
+export const otherIncomeApi = {
+  getAll: () => api.get('/other-income'),
+  getById: (id: string) => api.get(`/other-income/${id}`),
+  create: (data: any) => api.post('/other-income', data),
+  delete: (id: string) => api.delete(`/other-income/${id}`),
+};
+
+export const cbtApi = {
+  // Admin
+  getQuestions: (params?: any) => api.get('/cbt/questions', { params }),
+  createQuestion: (data: any) => api.post('/cbt/questions', data),
+  getExams: () => api.get('/cbt/exams'),
+  createExam: (data: any) => api.post('/cbt/exams', data),
+  
+  // Student
+  getStudentExams: (studentId: string) => api.get(`/cbt/student/${studentId}/exams`),
+  startAttempt: (studentId: string, examId: string) => api.post('/cbt/start-attempt', { studentId, examId }),
+  saveResponse: (data: { attemptId: string, questionId: string, selectedOption: string | null, timeSpent: number }) => api.post('/cbt/save-response', data),
+  submitExam: (attemptId: string) => api.post('/cbt/submit-exam', { attemptId }),
+  getAttemptResult: (attemptId: string) => api.get(`/cbt/attempt/${attemptId}`),
+  getLiveAttempts: () => api.get('/cbt/live'),
+  heartbeat: (attemptId: string, securityAlerts?: number) => api.post('/cbt/heartbeat', { attemptId, securityAlerts }),
+  terminateAttempt: (attemptId: string) => api.post(`/cbt/terminate/${attemptId}`),
 };
 
 export default api;

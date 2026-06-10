@@ -25,6 +25,7 @@ export default function Footer() {
               { name: "Course Catalog", href: "/courses" },
               { name: "Wall of Fame", href: "/results" },
               { name: "Admissions", href: "/apply" },
+              { name: "Staff Portal", href: "/admin/login" },
               { name: "Privacy Policy", href: "/privacy-policy" }
             ].map(link => (
               <Link key={link.name} href={link.href} className="text-sm font-medium text-white/40 hover:text-amber-500 transition-colors">{link.name}</Link>
@@ -35,6 +36,10 @@ export default function Footer() {
         <div className="space-y-6">
           <h5 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Student & Guardian</h5>
           <div className="flex flex-col gap-4">
+            <Link href="/login" className="flex items-center gap-2 text-sm font-medium text-white/40 hover:text-amber-500 transition-colors group">
+              <span className="material-symbols-outlined text-sm group-hover:text-amber-500 text-white/20">login</span>
+              Student Portal Login
+            </Link>
             <Link href="/leave-apply" className="flex items-center gap-2 text-sm font-medium text-white/40 hover:text-amber-500 transition-colors group">
               <span className="material-symbols-outlined text-sm group-hover:text-amber-500 text-white/20">luggage</span>
               Apply for Leave

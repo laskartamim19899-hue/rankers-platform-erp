@@ -1,0 +1,10 @@
+import { Request, Response } from 'express';
+export declare const issueLeave: (req: Request, res: Response) => Promise<void>;
+export declare const getAllLeaves: (req: Request, res: Response) => Promise<void>;
+export declare const getLeaveById: (req: Request, res: Response) => Promise<void>;
+export declare const updateLeaveStatus: (req: Request, res: Response) => Promise<void>;
+export declare const deleteLeave: (req: Request, res: Response) => Promise<void>;
+export declare const submitLeaveApplication: (req: Request, res: Response) => Promise<void>;
+export declare const approveLeaveApplication: (req: Request, res: Response) => Promise<void>;
+export declare const rejectLeaveApplication: (req: Request, res: Response) => Promise<void>;
+export declare const getLeaveStatusByRegNo: (req: Request, res: Response) => Promise<void>;

@@ -140,7 +140,7 @@ export const getPendingStudents = async (req: Request, res: Response): Promise<v
     const students = await prisma.student.findMany({
       where: { status: 'PENDING' },
       include: {
-        user: { select: { name: true, email: true } },
+        user: { select: { id: true, name: true, email: true } },
         courses: { include: { course: true, batch: true } }
       }
     });
@@ -188,7 +188,7 @@ export const getAllStudents = async (req: Request, res: Response): Promise<void>
   try {
     const students = await prisma.student.findMany({
       include: {
-        user: { select: { name: true, email: true } },
+        user: { select: { id: true, name: true, email: true } },
         courses: { include: { course: true, batch: true } }
       }
     });
@@ -204,17 +204,27 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
     const student = await prisma.student.findUnique({
       where: { id: id as string },
       include: {
-        user: { select: { name: true, email: true } },
+        user: { select: { id: true, name: true, email: true } },
         courses: { include: { course: true, batch: true } },
-        fees: true,
+        fees: { include: { course: true } },
+        payments: true,
         attendances: true,
-        results: { include: { test: true } }
+        results: { include: { test: true } },
+        hostelAlloc: { include: { hostel: true } },
+        leavePasses: true,
+        inventoryIssues: { include: { item: true } },
+        transportAlloc: { include: { vehicle: true, route: true } },
+        certificates: true
       }
     });
 
     if (!student) {
       res.status(404).json({ message: 'Student not found' });
       return;
+    }
+
+    if (student.status === 'INACTIVE') {
+      student.fees = student.fees.filter(f => f.status === 'PAID');
     }
 
     res.status(200).json(student);
@@ -225,7 +235,7 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
 export const updateStudent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { phone, address, photoUrl, guardianName, schoolName } = req.body;
+    const { phone, address, photoUrl, guardianName, schoolName, status } = req.body;
 
     const updated = await prisma.student.update({
       where: { id: id as string },
@@ -235,6 +245,7 @@ export const updateStudent = async (req: Request, res: Response): Promise<void> 
         ...(photoUrl !== undefined && { photoUrl }),
         ...(guardianName !== undefined && { guardianName }),
         ...(schoolName !== undefined && { schoolName }),
+        ...(status !== undefined && { status }),
       }
     });
 
@@ -250,11 +261,10 @@ export const searchStudentByRegNo = async (req: Request, res: Response): Promise
     const student = await prisma.student.findUnique({
       where: { regNo: regNo as string },
       include: {
-        user: { select: { name: true, email: true } },
+        user: { select: { id: true, name: true, email: true } },
         courses: { include: { course: true, batch: true } },
         fees: {
           where: {
-            dueDate: { lte: new Date() },
             status: { in: ['PENDING', 'PARTIAL'] }
           },
           include: { payments: { select: { amount: true } } }
@@ -265,6 +275,10 @@ export const searchStudentByRegNo = async (req: Request, res: Response): Promise
     if (!student) {
       res.status(404).json({ message: 'Student not found' });
       return;
+    }
+
+    if (student.status === 'INACTIVE') {
+      student.fees = [];
     }
 
     res.status(200).json(student);

@@ -43,12 +43,54 @@ export const updateGuestTeacher = async (req: Request, res: Response): Promise<v
   }
 };
 
-// DELETE guest teacher
+// DELETE guest teacher (Deep wipe: Teacher + Payments + Associated Ledger/Expenses)
 export const deleteGuestTeacher = async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.guestTeacher.delete({ where: { id: req.params.id as string } });
-    res.json({ message: 'Deleted' });
+    const { id } = req.params;
+
+    // 1. Fetch teacher and their payments to know what expenses to delete
+    const teacher = await prisma.guestTeacher.findUnique({
+      where: { id: id as string },
+      include: { payments: true }
+    });
+
+    if (!teacher) {
+      res.status(404).json({ message: 'Guest teacher not found' });
+      return;
+    }
+
+    // 2. Perform deep delete in a transaction
+    await prisma.$transaction(async (tx) => {
+      // Find all expenses linked to this teacher's payments
+      // We search by payeeName and purpose
+      const relatedExpenses = await tx.expense.findMany({
+        where: {
+          payeeName: teacher.name,
+          purpose: 'GUEST_FACULTY_PAYROLL'
+        }
+      });
+
+      // Delete the expenses
+      if (relatedExpenses.length > 0) {
+        await tx.expense.deleteMany({
+          where: { id: { in: relatedExpenses.map(e => e.id) } }
+        });
+      }
+
+      // Delete all payments
+      await tx.guestPayment.deleteMany({
+        where: { guestTeacherId: id as string }
+      });
+
+      // Finally delete the teacher profile
+      await tx.guestTeacher.delete({
+        where: { id: id as string }
+      });
+    });
+
+    res.json({ message: 'Teacher, payment history, and ledger records completely wiped.' });
   } catch (error) {
+    console.error('Deep Delete Guest Teacher Error:', error);
     res.status(500).json({ message: 'Server error', error });
   }
 };
@@ -141,9 +183,43 @@ export const getGuestPaymentHistory = async (req: Request, res: Response): Promi
 // DELETE payment record
 export const deleteGuestPayment = async (req: Request, res: Response): Promise<void> => {
   try {
-    await prisma.guestPayment.delete({ where: { id: req.params.id as string } });
-    res.json({ message: 'Deleted' });
+    const { id } = req.params;
+    
+    // 1. Get the payment details before deleting to find the associated expense
+    const payment = await prisma.guestPayment.findUnique({
+      where: { id: id as string },
+      include: { guestTeacher: true }
+    });
+
+    if (!payment) {
+      res.status(404).json({ message: 'Payment record not found' });
+      return;
+    }
+
+    // 2. Use a transaction to delete both the payment and the potential expense
+    await prisma.$transaction(async (tx) => {
+      // Delete the payment
+      await tx.guestPayment.delete({ where: { id: id as string } });
+
+      // Try to find and delete the associated expense
+      // We search by amount, payee name, and purpose
+      const relatedExpense = await tx.expense.findFirst({
+        where: {
+          amount: payment.totalAmount,
+          payeeName: payment.guestTeacher.name,
+          purpose: 'GUEST_FACULTY_PAYROLL',
+          // Optionally check for same day if we want to be very strict
+        }
+      });
+
+      if (relatedExpense) {
+        await tx.expense.delete({ where: { id: relatedExpense.id } });
+      }
+    });
+
+    res.json({ message: 'Payment and associated ledger entry deleted' });
   } catch (error) {
+    console.error('Delete Guest Payment Error:', error);
     res.status(500).json({ message: 'Server error', error });
   }
 };

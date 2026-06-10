@@ -156,6 +156,10 @@ export default function AdminAcademics() {
             <span className="material-symbols-outlined text-[18px]">fact_check</span>
             Manage Exams & Results
           </Link>
+          <Link href="/admin/academics/cbt" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200">
+            <span className="material-symbols-outlined text-[18px]">computer</span>
+            CBT Exam System
+          </Link>
         </div>
       </header>
 

@@ -78,9 +78,9 @@ export default function GuestTeacherPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this guest teacher? All payment records will also be removed.")) return;
+    if (!confirm("WIPE TEACHER DATA? This will permanently delete the teacher profile, ALL payment history, and ALL associated ledger/expense records. This cannot be undone! Proceed?")) return;
     try { await guestApi.remove(id); setSelected(null); fetchAll(); }
-    catch { alert("Failed to delete"); }
+    catch { alert("Failed to wipe teacher data."); }
   };
 
   const handlePay = async (e: React.FormEvent) => {
@@ -96,11 +96,20 @@ export default function GuestTeacherPage() {
   };
 
   const handleDeletePayment = async (pid: string) => {
-    if (!confirm("Delete this payment record?")) return;
+    console.log("Attempting to delete guest payment:", pid);
+    if (!confirm("Delete this payment record? All financial ledger entries will also be removed. Proceed?")) return;
     try {
-      await guestApi.deletePayment(pid);
-      if (selected) { const r = await guestApi.getHistory(selected.id); setHistory(r.data); }
-    } catch { alert("Failed"); }
+      const res = await guestApi.deletePayment(pid);
+      console.log("Delete success:", res.data);
+      if (selected) { 
+        const r = await guestApi.getHistory(selected.id); 
+        setHistory(r.data); 
+        setTotalPaid(r.data.filter((p: any) => p.status === 'PAID').reduce((s: number, p: any) => s + p.totalAmount, 0));
+      }
+    } catch (err: any) { 
+      console.error("Delete failed:", err);
+      alert(err.response?.data?.message || "Failed to delete payment record. Please check your network or permissions."); 
+    }
   };
 
   const classAmt = parseFloat(classesHeld || "0") * parseFloat(ratePerClass || "0");
@@ -382,7 +391,10 @@ export default function GuestTeacherPage() {
                               <Link href={`/guest-slip/${p.id}`} className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center hover:bg-orange-600 hover:text-white transition-all" title="View Slip">
                                 <span className="material-symbols-outlined text-sm">print</span>
                               </Link>
-                              <button onClick={() => handleDeletePayment(p.id)} className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
+                               <button 
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleDeletePayment(p.id); }} 
+                                className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
                                 <span className="material-symbols-outlined text-sm">delete</span>
                               </button>
                             </div>

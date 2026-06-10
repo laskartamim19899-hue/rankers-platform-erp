@@ -1,0 +1,16 @@
+import { Request, Response } from 'express';
+export declare const getStudentAcademicSummary: (req: Request, res: Response) => Promise<void>;
+export declare const markAttendance: (req: Request, res: Response) => Promise<void>;
+export declare const addTestResult: (req: Request, res: Response) => Promise<void>;
+export declare const getCourses: (req: Request, res: Response) => Promise<void>;
+export declare const getBatches: (req: Request, res: Response) => Promise<void>;
+export declare const getTests: (req: Request, res: Response) => Promise<void>;
+export declare const createTest: (req: Request, res: Response) => Promise<void>;
+export declare const createBatch: (req: Request, res: Response) => Promise<void>;
+export declare const assignTeacher: (req: Request, res: Response) => Promise<void>;
+export declare const deleteBatch: (req: Request, res: Response) => Promise<void>;
+export declare const getTeachers: (req: Request, res: Response) => Promise<void>;
+export declare const createCourse: (req: Request, res: Response) => Promise<void>;
+export declare const deleteCourse: (req: Request, res: Response) => Promise<void>;
+export declare const getAttendanceReport: (req: Request, res: Response) => Promise<void>;
+export declare const getResultsByRegNo: (req: Request, res: Response) => Promise<void>;

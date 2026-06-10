@@ -11,6 +11,7 @@ const MODE_ICON: Record<string, string> = {
 export default function TransactionLedger() {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState("");
 
   // TXN Verifier state
@@ -38,13 +39,24 @@ export default function TransactionLedger() {
   }, []);
 
   const handleDelete = async (txn: any) => {
-    if (!confirm(`Delete this ${txn.type} entry? This cannot be undone.`)) return;
+    if (!confirm(`Are you sure you want to delete this ${txn.type} entry?\n\n${txn.title}\nAmount: ₹${txn.amount.toLocaleString()}\n\nThis action cannot be undone.`)) return;
+    
+    setDeletingId(txn.id);
     try {
-      if (txn.type === "INCOME") await financeApi.deletePayment(txn.id);
-      else await expenseApi.delete(txn.id);
-      fetchData();
-    } catch {
-      alert("Delete failed.");
+      if (txn.type === "INCOME") {
+        await financeApi.deletePayment(txn.id);
+      } else {
+        await expenseApi.delete(txn.id);
+      }
+      // Trigger a small delay for "smoothness" and to ensure DB consistency
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await fetchData();
+      alert("Transaction deleted successfully.");
+    } catch (err: any) {
+      console.error("Delete failed:", err);
+      alert(`Failed to delete transaction: ${err?.response?.data?.message || err.message}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -375,8 +387,17 @@ export default function TransactionLedger() {
                           </Link>
                         )}
                         {(userRole === "ADMIN" || userRole === "SUPER_ADMIN") && (
-                          <button onClick={() => handleDelete(txn)} className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all" title="Delete">
-                            <span className="material-symbols-outlined text-sm">delete</span>
+                          <button 
+                            onClick={() => handleDelete(txn)} 
+                            disabled={deletingId === txn.id}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${deletingId === txn.id ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-red-50 text-red-600 hover:bg-red-600 hover:text-white"}`}
+                            title="Delete"
+                          >
+                            {deletingId === txn.id ? (
+                              <span className="animate-spin material-symbols-outlined text-sm">progress_activity</span>
+                            ) : (
+                              <span className="material-symbols-outlined text-sm">delete</span>
+                            )}
                           </button>
                         )}
                       </div>

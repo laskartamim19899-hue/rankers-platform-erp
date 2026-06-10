@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { financeApi, settingsApi } from "@/lib/api";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { exportToCSV } from "@/lib/utils";
 
-export default function AdminFinance() {
+function AdminFinanceContent() {
   const [dues, setDues] = useState<any[]>([]);
   const [filteredDues, setFilteredDues] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,13 +21,15 @@ export default function AdminFinance() {
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("CASH");
   const [transactionId, setTransactionId] = useState("");
+  const [mercyReason, setMercyReason] = useState("");
   const [userRole, setUserRole] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleExport = () => {
     const exportData = filteredDues.map(d => ({
       "Student Name": d.student.user.name,
-      "Registration No": d.student.regNo,
+      "Registration No": d.student.regNo || "N/A",
       "Fee Type": d.type,
       "Month/Details": d.month || "Academic",
       "Principal Amount": d.amount,
@@ -47,9 +49,21 @@ export default function AdminFinance() {
   useEffect(() => {
     const fetchDues = async () => {
       try {
-        const res = await financeApi.getAllDues();
+        const res = await financeApi.getAllPending();
         setDues(res.data);
         setFilteredDues(res.data);
+
+        // Pre-select student if provided in URL
+        const preSelectRegNo = searchParams.get("regNo");
+        const preSelectFeeId = searchParams.get("feeId");
+        
+        if (preSelectRegNo) {
+          setSearchQuery(preSelectRegNo);
+          if (preSelectFeeId) {
+            const fee = res.data.find((f: any) => f.id === preSelectFeeId);
+            if (fee) setSelectedFees([fee]);
+          }
+        }
       } catch (err) {
         console.error("Failed to fetch dues", err);
       } finally {
@@ -57,7 +71,7 @@ export default function AdminFinance() {
       }
     };
     fetchDues();
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     let result = dues;
@@ -65,8 +79,8 @@ export default function AdminFinance() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(d => 
-        d.student.user.name.toLowerCase().includes(q) || 
-        d.student.regNo.toLowerCase().includes(q)
+        (d.student.user.name && d.student.user.name.toLowerCase().includes(q)) || 
+        (d.student.regNo && d.student.regNo.toLowerCase().includes(q))
       );
     }
 
@@ -89,6 +103,10 @@ export default function AdminFinance() {
       if (isSelected) {
         return prev.filter(f => f.id !== fee.id);
       } else {
+        // Only allow selecting fees from the same student
+        if (prev.length > 0 && prev[0].studentId !== fee.studentId) {
+          return [fee];
+        }
         return [...prev, fee];
       }
     });
@@ -99,7 +117,7 @@ export default function AdminFinance() {
     if (!confirm("Mercy granted! Waive the entire late fine for this student?")) return;
     try {
       await settingsApi.waiveLateFee(feeId);
-      const res = await financeApi.getAllDues();
+      const res = await financeApi.getAllPending();
       setDues(res.data);
       setFilteredDues(res.data);
     } catch (err) {
@@ -110,25 +128,46 @@ export default function AdminFinance() {
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFees.length === 0) return;
+
+    // Special confirmation for MERCY mode
+    if (paymentMode === 'MERCY') {
+      const totalRemaining = selectedFees.reduce((sum, f) => {
+        const gross = f.amount + (f.lateFee || 0);
+        const paid = (f.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+        return sum + Math.max(0, gross - paid);
+      }, 0);
+      const confirmed = confirm(
+        `⚠️ MERCY WAIVER — IRREVERSIBLE ACTION\n\n` +
+        `You are about to write off ₹${totalRemaining.toLocaleString()} in dues for ${selectedFees[0].student?.user?.name || 'this student'}.\n\n` +
+        `Reason: "${mercyReason || 'No reason provided'}"\n\n` +
+        `This will mark the selected fee(s) as PAID via MERCY and cannot be undone.\nProceed?`
+      );
+      if (!confirmed) return;
+    }
+
     setRecording(true);
     try {
       const payRes = await financeApi.payFee({
         feeIds: selectedFees.map(f => f.id),
         studentId: selectedFees[0].studentId,
-        amount: amount, // Only used if 1 fee is selected
+        amount: amount,
         paymentMode,
-        transactionId: transactionId
+        transactionId: paymentMode === 'MERCY' ? `MERCY-WAIVER: ${mercyReason}` : transactionId
       });
-      alert("Payment recorded successfully!");
-      if (confirm("View Receipt?")) {
-        // For multi-payment, we'll link to the first one or a specialized view
-        // For now, let's just go to the first payment in the result
-        router.push(`/receipt/${payRes.data.payments[0].id}`);
+      if (paymentMode === 'MERCY') {
+        alert("✅ Mercy Waiver recorded. Fee(s) written off.");
+      } else {
+        alert("Payment recorded successfully!");
+        if (confirm("View Receipt?")) {
+          router.push(`/receipt/${payRes.data.payments[0].id}`);
+        }
       }
       setAmount("");
       setTransactionId("");
+      setMercyReason("");
       setSelectedFees([]);
-      const res = await financeApi.getAllDues();
+      setPaymentMode("CASH");
+      const res = await financeApi.getAllPending();
       setDues(res.data);
     } catch (err) {
       alert("Failed to record payment");
@@ -136,6 +175,9 @@ export default function AdminFinance() {
       setRecording(false);
     }
   };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <div className="bg-slate-50 min-h-screen pb-20">
@@ -146,10 +188,16 @@ export default function AdminFinance() {
           </Link>
           <h1 className="text-xl font-black text-primary tracking-tight">Financial Treasury</h1>
         </div>
-        <button onClick={handleExport} className="bg-white text-slate-600 border-2 border-slate-200 px-6 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-emerald-600 hover:text-emerald-600 transition-all flex items-center gap-2">
-          <span className="material-symbols-outlined text-sm">download</span>
-          Export CSV
-        </button>
+        <div className="flex gap-3">
+          <Link href="/admin/finance/other-income" className="bg-emerald-50 text-emerald-600 border-2 border-emerald-100 px-4 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">account_balance</span>
+            Income & Inv.
+          </Link>
+          <button onClick={handleExport} className="bg-white text-slate-600 border-2 border-slate-200 px-6 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-emerald-600 hover:text-emerald-600 transition-all flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm">download</span>
+            Export CSV
+          </button>
+        </div>
       </header>
 
       {/* Control Bar */}
@@ -190,18 +238,50 @@ export default function AdminFinance() {
       <main className="max-w-5xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-lg font-bold text-slate-800 px-1 flex items-center gap-2">
-            <span className="material-symbols-outlined text-secondary">search_check</span>
-            Debt Recovery Lookup
+            <span className="material-symbols-outlined text-secondary">payments</span>
+            Active Dues & Installments
           </h2>
+
+          {/* Live Summary Strip */}
+          {!isLoading && dues.length > 0 && (() => {
+            const todayMid = new Date(); todayMid.setHours(0,0,0,0);
+            let overdueAmt = 0, futureAmt = 0;
+            dues.forEach(f => {
+              const paid = (f.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+              const rem = Math.max(0, (f.amount + (f.lateFee || 0)) - paid);
+              if (new Date(f.dueDate) <= todayMid) overdueAmt += rem;
+              else futureAmt += rem;
+            });
+            return (
+              <div className="grid grid-cols-3 gap-3 mb-2">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-red-400 mb-1">🔴 Overdue</p>
+                  <p className="text-lg font-black text-red-600">₹{overdueAmt.toLocaleString()}</p>
+                  <p className="text-[8px] text-red-400 font-bold">{dues.filter(f => new Date(f.dueDate) <= todayMid).length} fees</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-blue-400 mb-1">🔵 Upcoming</p>
+                  <p className="text-lg font-black text-blue-600">₹{futureAmt.toLocaleString()}</p>
+                  <p className="text-[8px] text-blue-400 font-bold">{dues.filter(f => new Date(f.dueDate) > todayMid).length} fees</p>
+                </div>
+                <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-center">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">⚡ Total Outstanding</p>
+                  <p className="text-lg font-black text-white">₹{(overdueAmt + futureAmt).toLocaleString()}</p>
+                  <p className="text-[8px] text-slate-400 font-bold">{dues.length} fees</p>
+                </div>
+              </div>
+            );
+          })()}
           {isLoading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
             </div>
-          ) : (searchQuery || batchFilter !== "ALL" || typeFilter !== "ALL") ? (
+          ) : (
             filteredDues.length > 0 ? (
               <div className="grid grid-cols-1 gap-3">
                 {filteredDues.map(fee => {
                   const isSelected = selectedFees.some(f => f.id === fee.id);
+                  const isFuture = new Date(fee.dueDate) > today;
                   return (
                     <div 
                       key={fee.id} 
@@ -224,6 +304,12 @@ export default function AdminFinance() {
                                   {fee.month}
                                 </span>
                               )}
+                              {isFuture && (
+                                <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[10px]">upcoming</span>
+                                  Future
+                                </span>
+                              )}
                             </div>
                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{fee.course.name}</p>
                           </div>
@@ -234,7 +320,7 @@ export default function AdminFinance() {
                       </div>
                       <div className="flex justify-between items-end mt-4">
                         <div className="pl-8">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Remaining Due</p>
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Remaining Balance</p>
                           {(() => {
                             const gross = fee.amount + (fee.lateFee || 0);
                             const paid = (fee.payments || []).reduce((s: number, p: any) => s + p.amount, 0);
@@ -268,7 +354,10 @@ export default function AdminFinance() {
                             </div>
                           )}
                         </div>
-                        <p className="text-[10px] text-slate-400 font-bold italic">Due: {new Date(fee.dueDate).toLocaleDateString()}</p>
+                        <div className="text-right">
+                          <p className="text-[10px] text-slate-400 font-bold italic">Due: {new Date(fee.dueDate).toLocaleDateString()}</p>
+                          {isFuture && <p className="text-[9px] text-emerald-500 font-black uppercase">Early Payment Allowed</p>}
+                        </div>
                       </div>
                     </div>
                   );
@@ -277,20 +366,10 @@ export default function AdminFinance() {
             ) : (
               <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 text-center">
                 <span className="material-symbols-outlined text-slate-300 text-6xl mb-4">person_search</span>
-                <h3 className="text-slate-900 font-black">No Match Found</h3>
-                <p className="text-sm text-slate-500 mt-1">Try searching with a different Name or Registration Number.</p>
+                <h3 className="text-slate-900 font-black">No Pending Dues</h3>
+                <p className="text-sm text-slate-500 mt-1">All accounts are cleared or no fees match your filters.</p>
               </div>
             )
-          ) : (
-            <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-200 text-center">
-              <div className="w-16 h-16 bg-primary/5 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="material-symbols-outlined">search</span>
-              </div>
-              <h3 className="text-slate-900 font-black">Ready for Lookup</h3>
-              <p className="text-sm text-slate-500 max-w-xs mx-auto mt-1">
-                Enter a <strong>Student Name</strong> or <strong>Reg No</strong> above to pull up their pending dues and record a payment.
-              </p>
-            </div>
           )}
         </div>
 
@@ -350,46 +429,97 @@ export default function AdminFinance() {
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Payment Mode</label>
                   <select 
                     value={paymentMode}
-                    onChange={(e) => setPaymentMode(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => { setPaymentMode(e.target.value); setAmount(""); }}
+                    className={`w-full h-12 px-4 rounded-xl border focus:ring-2 outline-none transition-all ${
+                      paymentMode === 'MERCY'
+                        ? 'border-purple-400 bg-purple-50 text-purple-800 font-black focus:ring-purple-300'
+                        : 'border-slate-200 focus:ring-primary'
+                    }`}
                   >
                     <option value="CASH">Cash</option>
                     <option value="UPI">UPI / GPay</option>
                     <option value="ONLINE">Bank Transfer</option>
                     <option value="CHEQUE">Cheque</option>
+                    {userRole === 'SUPER_ADMIN' && (
+                      <option value="MERCY">⚡ Mercy Waiver (Write-Off)</option>
+                    )}
                   </select>
+                  {paymentMode === 'MERCY' && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
+                      <p className="text-[9px] font-black text-purple-700 uppercase tracking-widest mb-1">⚠️ MERCY MODE ACTIVE</p>
+                      <p className="text-[9px] text-purple-600">
+                        This will <strong>write off</strong> the selected fee(s) without collecting any money.
+                        The full remaining balance will be waived. This action is <strong>irreversible</strong>.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest text-[10px]">Transaction / Ref No</label>
-                  <input 
-                    type="text"
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all font-medium text-sm"
-                    placeholder="e.g. UTR123456789"
-                  />
-                  <p className="text-[10px] text-slate-400 font-medium italic">* Leave blank for auto-generation</p>
-                </div>
+                {paymentMode === 'MERCY' ? (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-purple-600 uppercase tracking-widest text-[10px]">Reason for Mercy Waiver *</label>
+                    <textarea
+                      value={mercyReason}
+                      onChange={(e) => setMercyReason(e.target.value)}
+                      rows={3}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-purple-200 bg-purple-50 focus:ring-2 focus:ring-purple-300 outline-none transition-all font-medium text-sm text-purple-900 resize-none"
+                      placeholder="e.g. Financial hardship, scholarship waiver, principal approval..."
+                    />
+                    <p className="text-[9px] text-purple-400 font-medium italic">* Required — this reason will be logged against the student's ledger</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest text-[10px]">Transaction / Ref No</label>
+                    <input 
+                      type="text"
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all font-medium text-sm"
+                      placeholder="e.g. UTR123456789"
+                    />
+                    <p className="text-[10px] text-slate-400 font-medium italic">* Leave blank for auto-generation</p>
+                  </div>
+                )}
 
                 <button
                   type="submit"
-                  disabled={recording}
-                  className="w-full h-14 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+                  disabled={recording || (paymentMode === 'MERCY' && !mercyReason.trim())}
+                  className={`w-full h-14 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 ${
+                    paymentMode === 'MERCY'
+                      ? 'bg-purple-600 hover:bg-purple-800 text-white'
+                      : 'bg-primary hover:bg-black text-white'
+                  }`}
                 >
-                  {recording ? "Processing..." : "Confirm Multi-Payment"}
-                  <span className="material-symbols-outlined">payments</span>
+                  {recording
+                    ? "Processing..."
+                    : paymentMode === 'MERCY'
+                    ? "⚡ Grant Mercy Waiver"
+                    : "Confirm Multi-Payment"}
+                  <span className="material-symbols-outlined">{paymentMode === 'MERCY' ? 'volunteer_activism' : 'payments'}</span>
                 </button>
               </form>
             ) : (
               <div className="text-center py-12">
                 <span className="material-symbols-outlined text-slate-200 text-6xl mb-4">account_balance_wallet</span>
-                <p className="text-slate-400 text-sm font-medium">Search for a student and select multiple dues to record a bulk payment.</p>
+                <p className="text-slate-400 text-sm font-medium">Select one or more dues from the list to record a payment.</p>
               </div>
             )}
           </div>
         </div>
       </main>
     </div>
+  );
+}
+
+export default function AdminFinance() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div>
+      </div>
+    }>
+      <AdminFinanceContent />
+    </Suspense>
   );
 }
