@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { communicationApi, inquiryApi, reportApi, studentApi } from "@/lib/api";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -486,48 +487,49 @@ export default function AdminDashboard() {
               </select>
             </div>
             {/* Dynamic Chart Visualization */}
-            <div className="relative h-64 w-full flex flex-col justify-end">
-              <div className="absolute inset-0 flex flex-col justify-between py-2 border-l border-b border-slate-100">
-                <div className="w-full border-t border-slate-50 h-px"></div>
-                <div className="w-full border-t border-slate-50 h-px"></div>
-                <div className="w-full border-t border-slate-50 h-px"></div>
-                <div className="w-full border-t border-slate-50 h-px"></div>
-              </div>
-              <svg className="w-full h-full relative z-10 overflow-visible" viewBox="0 0 800 200">
-                <defs>
-                  <linearGradient id="line-grad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.2"></stop>
-                    <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0"></stop>
-                  </linearGradient>
-                </defs>
-                {(() => {
-                  if (!stats?.revenueOverTime || stats.revenueOverTime.length === 0) return null;
-                  const maxAmt = Math.max(...stats.revenueOverTime.map((r: any) => r.amount), 1);
-                  const points = stats.revenueOverTime.map((r: any, i: number) => {
-                    const x = (i / Math.max(stats.revenueOverTime.length - 1, 1)) * 800;
-                    const y = 200 - ((r.amount / maxAmt) * 160); // max height is 160
-                    return `${x},${y}`;
-                  });
-                  const pathD = `M${points.join(' L')}`;
-                  const areaD = `${pathD} L800,200 L0,200 Z`;
-                  return (
-                    <>
-                      <path d={areaD} fill="url(#line-grad)"></path>
-                      <path d={pathD} fill="none" stroke="#00236f" strokeLinecap="round" strokeWidth="3"></path>
-                      {points.map((p: string, i: number) => {
-                        const [x, y] = p.split(',');
-                        return <circle key={i} cx={x} cy={y} fill="#00236f" r="4"></circle>
-                      })}
-                    </>
-                  );
-                })()}
-              </svg>
-              <div className="flex justify-between mt-4 text-[10px] font-bold text-slate-400 px-2 uppercase tracking-tighter">
-                {stats?.revenueOverTime?.map((r: any, idx: number) => (
-                  <span key={idx}>{r.month}</span>
-                ))}
-                {(!stats?.revenueOverTime || stats.revenueOverTime.length === 0) && <span>No data</span>}
-              </div>
+            <div className="relative h-64 w-full mt-4">
+              {!stats?.revenueOverTime || stats.revenueOverTime.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 font-black text-[10px] uppercase tracking-widest">No data available</div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={stats.revenueOverTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1e3a8a" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#1e3a8a" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="month" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                      tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', fontWeight: 800, fontSize: '12px', color: '#0f172a' }}
+                      itemStyle={{ color: '#1e3a8a' }}
+                      formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="amount" 
+                      stroke="#1e3a8a" 
+                      strokeWidth={3} 
+                      fillOpacity={1} 
+                      fill="url(#colorRevenue)" 
+                      activeDot={{ r: 6, strokeWidth: 0, fill: '#1e3a8a' }}
+                      animationDuration={1500}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
           {/* Bar Chart: Batch Distribution */}

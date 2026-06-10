@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { studentApi, academicApi } from "@/lib/api";
+import { studentApi, academicApi, financeApi } from "@/lib/api";
 
 function StudentProfileContent() {
   const params = useParams();
@@ -72,6 +72,48 @@ function StudentProfileContent() {
   };
 
   const [activeTab, setActiveTab] = useState("PERSONAL");
+
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState({ feeId: "", amount: "", paymentMode: "CASH", referenceNumber: "", remarks: "" });
+
+  const handlePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentData.feeId || !paymentData.amount) return alert("Select fee and enter amount");
+    if (paymentData.paymentMode === "MERCY" && !paymentData.remarks) return alert("Reason is mandatory for Mercy Waiver");
+    try {
+      const isConfirmed = paymentData.paymentMode === "MERCY" ? confirm(`Are you absolutely sure you want to WAIVE ₹${paymentData.amount}? This cannot be undone.`) : true;
+      if (!isConfirmed) return;
+      await financeApi.recordPayment({
+        studentId: params.id as string,
+        feeId: paymentData.feeId,
+        amount: Number(paymentData.amount),
+        paymentMode: paymentData.paymentMode,
+        referenceNumber: paymentData.referenceNumber || "WEB",
+        remarks: paymentData.remarks
+      });
+      alert("Transaction processed successfully!");
+      setIsPaymentModalOpen(false);
+      setPaymentData({ feeId: "", amount: "", paymentMode: "CASH", referenceNumber: "", remarks: "" });
+      fetchStudent();
+    } catch (err) { alert("Failed to process transaction"); }
+  };
+
+  let totalOverdue = 0;
+  let totalUpcoming = 0;
+  let totalOutstanding = 0;
+  if (student) {
+    student.fees?.forEach((fee: any) => {
+      const isOverdue = new Date(fee.dueDate) <= new Date();
+      const feePaid = student.payments?.filter((p:any) => p.feeId === fee.id).reduce((s:number, p:any) => s + p.amount, 0) || 0;
+      const gross = fee.amount + (fee.lateFee || 0);
+      const remaining = Math.max(0, gross - feePaid);
+      if (remaining > 0) {
+        totalOutstanding += remaining;
+        if (isOverdue) totalOverdue += remaining;
+        else totalUpcoming += remaining;
+      }
+    });
+  }
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div></div>;
   if (!student) return <div className="min-h-screen flex items-center justify-center font-black text-slate-400 uppercase tracking-widest">Student Not Found</div>;
@@ -161,6 +203,87 @@ function StudentProfileContent() {
         </div>
       )}
 
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className={`p-8 text-white ${paymentData.paymentMode === 'MERCY' ? 'bg-purple-600' : 'bg-emerald-600'}`}>
+              <h2 className="text-2xl font-black tracking-tight">{paymentData.paymentMode === 'MERCY' ? 'Mercy Waiver' : 'Record Transaction'}</h2>
+              <p className="text-xs font-bold opacity-70 uppercase tracking-widest mt-1">Process Fee Ledger Update</p>
+            </div>
+            <form onSubmit={handlePayment} className="p-8 space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Select Fee Target</label>
+                  <select 
+                    required
+                    value={paymentData.feeId}
+                    onChange={(e) => {
+                      const feeId = e.target.value;
+                      const f = student.fees?.find((fee:any) => fee.id === feeId);
+                      if (f) {
+                        const paid = student.payments?.filter((p:any) => p.feeId === f.id).reduce((s:number, p:any) => s + p.amount, 0) || 0;
+                        setPaymentData(prev => ({...prev, feeId, amount: String(Math.max(0, f.amount - paid))}));
+                      } else {
+                        setPaymentData(prev => ({...prev, feeId}));
+                      }
+                    }}
+                    className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+                  >
+                    <option value="">Select Pending Fee...</option>
+                    {student.fees?.filter((f:any) => {
+                      const p = student.payments?.filter((px:any)=>px.feeId===f.id).reduce((s:number,px:any)=>s+px.amount,0)||0;
+                      return f.amount > p;
+                    }).map((f:any) => (
+                      <option key={f.id} value={f.id}>{f.type} {f.month ? `(${f.month})` : ''} - ₹{Math.max(0, f.amount - (student.payments?.filter((px:any)=>px.feeId===f.id).reduce((s:number,px:any)=>s+px.amount,0)||0))} Due</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Action Mode</label>
+                    <select 
+                      value={paymentData.paymentMode}
+                      onChange={(e) => setPaymentData({...paymentData, paymentMode: e.target.value})}
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+                    >
+                      <option value="CASH">CASH</option>
+                      <option value="BANK_TRANSFER">BANK TRANSFER</option>
+                      <option value="UPI">UPI</option>
+                      <option value="CHEQUE">CHEQUE</option>
+                      <option value="MERCY">MERCY WAIVER</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Amount (₹)</label>
+                    <input 
+                      type="number" required
+                      value={paymentData.amount}
+                      onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})}
+                      className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{paymentData.paymentMode === 'MERCY' ? 'Waiver Reason (Mandatory)' : 'Reference / Remarks'}</label>
+                  <input 
+                    type="text"
+                    value={paymentData.remarks}
+                    onChange={(e) => setPaymentData({...paymentData, remarks: e.target.value})}
+                    placeholder={paymentData.paymentMode === 'MERCY' ? "Explain why this fee is waived..." : "Txn ID / Note"}
+                    className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all">Cancel</button>
+                <button type="submit" className={`flex-1 h-12 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${paymentData.paymentMode === 'MERCY' ? 'bg-purple-600 shadow-purple-600/20 hover:bg-purple-700' : 'bg-emerald-600 shadow-emerald-600/20 hover:bg-emerald-700'}`}>Confirm Transaction</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto p-6">
         {/* Profile Banner */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm mb-8 overflow-hidden relative">
@@ -174,6 +297,11 @@ function StudentProfileContent() {
                 <span className="px-4 py-1 bg-blue-50 text-primary border border-blue-100 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm">
                   {student.regNo || "REGISTRATION PENDING"}
                 </span>
+                {totalOutstanding > 0 && (
+                  <span className={`px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm ${totalOverdue > 0 ? 'bg-red-50 text-red-600 border border-red-100 animate-pulse' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                    {totalOverdue > 0 ? `🔴 OVERDUE: ₹${totalOverdue.toLocaleString()}` : `Total Dues: ₹${totalOutstanding.toLocaleString()}`}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap gap-2 mt-4 justify-center md:justify-start">
                 {student.courses.map((c: any) => (
@@ -369,40 +497,55 @@ function StudentProfileContent() {
 
           {activeTab === "FINANCIAL" && (
             <div className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="bg-primary p-8 rounded-[2.5rem] text-white shadow-xl shadow-primary/20 relative overflow-hidden">
-                  <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">Total Fee Liability</p>
-                  <p className="text-4xl font-black tracking-tighter">₹{(student.fees?.reduce((acc: number, f: any) => acc + f.amount, 0) || 0).toLocaleString()}</p>
-                  <div className="absolute right-0 bottom-0 p-4 opacity-10"><span className="material-symbols-outlined text-6xl">account_balance</span></div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-primary p-6 rounded-[2rem] text-white shadow-xl shadow-primary/20 relative overflow-hidden">
+                  <p className="text-[9px] font-black opacity-60 uppercase tracking-widest mb-1">Total Fee Liability</p>
+                  <p className="text-3xl font-black tracking-tighter">₹{(student.fees?.reduce((acc: number, f: any) => acc + f.amount, 0) || 0).toLocaleString()}</p>
                 </div>
-                <div className="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-emerald-600/20 relative overflow-hidden">
-                  <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">Total Paid</p>
-                  <p className="text-4xl font-black tracking-tighter">₹{(student.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0).toLocaleString()}</p>
-                  <div className="absolute right-0 bottom-0 p-4 opacity-10"><span className="material-symbols-outlined text-6xl">payments</span></div>
+                <div className="bg-emerald-600 p-6 rounded-[2rem] text-white shadow-xl shadow-emerald-600/20 relative overflow-hidden">
+                  <p className="text-[9px] font-black opacity-60 uppercase tracking-widest mb-1">Total Paid</p>
+                  <p className="text-3xl font-black tracking-tighter">₹{(student.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0).toLocaleString()}</p>
                 </div>
-                <div className="bg-rose-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-rose-600/20 relative overflow-hidden">
-                  <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">Outstanding Balance</p>
-                  <p className="text-4xl font-black tracking-tighter">₹{((student.fees?.reduce((acc: number, f: any) => acc + f.amount, 0) || 0) - (student.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0)).toLocaleString()}</p>
-                  <div className="absolute right-0 bottom-0 p-4 opacity-10"><span className="material-symbols-outlined text-6xl">warning</span></div>
+                <div className="bg-red-600 p-6 rounded-[2rem] text-white shadow-xl shadow-red-600/20 relative overflow-hidden">
+                  <p className="text-[9px] font-black opacity-80 uppercase tracking-widest mb-1">🔴 Overdue Dues</p>
+                  <p className="text-3xl font-black tracking-tighter">₹{totalOverdue.toLocaleString()}</p>
+                </div>
+                <div className="bg-blue-600 p-6 rounded-[2rem] text-white shadow-xl shadow-blue-600/20 relative overflow-hidden">
+                  <p className="text-[9px] font-black opacity-80 uppercase tracking-widest mb-1">🔵 Upcoming Dues</p>
+                  <p className="text-3xl font-black tracking-tighter">₹{totalUpcoming.toLocaleString()}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-900 mb-8">Fee Ledger</h3>
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-sm font-black text-slate-900">Fee Ledger</h3>
+                    <button 
+                      onClick={() => setIsPaymentModalOpen(true)}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/20"
+                    >
+                      Record / Waive
+                    </button>
+                  </div>
                   <div className="space-y-4">
-                    {student.fees?.map((f: any) => (
-                      <div key={f.id} className="p-4 rounded-2xl border border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                    {student.fees?.map((f: any) => {
+                      const isOverdue = new Date(f.dueDate) <= new Date();
+                      const paid = student.payments?.filter((p:any) => p.feeId === f.id).reduce((s:number, p:any) => s + p.amount, 0) || 0;
+                      const remaining = Math.max(0, f.amount - paid);
+                      return (
+                      <div key={f.id} className={`p-4 rounded-2xl border flex justify-between items-center ${remaining > 0 ? (isOverdue ? 'border-red-100 bg-red-50/50' : 'border-blue-50 bg-blue-50/30') : 'border-emerald-50 bg-emerald-50/50'}`}>
                         <div>
                           <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{f.type} FEE</p>
                           <p className="text-[10px] font-bold text-slate-400">{f.month ? `Month: ${f.month}` : f.course?.name}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-black text-slate-900">₹{f.amount.toLocaleString()}</p>
-                          <span className={`text-[8px] font-black uppercase tracking-widest ${f.status === 'PAID' ? 'text-emerald-500' : 'text-rose-500'}`}>{f.status}</span>
+                          <p className={`font-black ${remaining > 0 ? (isOverdue ? 'text-red-600' : 'text-blue-600') : 'text-emerald-600'}`}>₹{f.amount.toLocaleString()}</p>
+                          <span className={`text-[8px] font-black uppercase tracking-widest ${remaining > 0 ? (isOverdue ? 'text-red-500' : 'text-blue-500') : 'text-emerald-500'}`}>
+                            {remaining > 0 ? `₹${remaining.toLocaleString()} DUE` : 'PAID IN FULL'}
+                          </span>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
                 <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
